@@ -426,10 +426,18 @@ final class OpenAI_Handler {
 			$result = $result['result'];
 		}
 
-		foreach ( [ 'type', 'justification', 'summary', 'details' ] as $k ) {
+		foreach ( [ 'type', 'justification', 'summary' ] as $k ) {
 			if ( ! array_key_exists( $k, $result ) ) {
 				return new WP_Error( 'basai_openai_missing_keys', 'AI output missing required keys.' );
 			}
+		}
+
+		if ( ! isset( $result['details'] ) || ! is_array( $result['details'] ) ) {
+			$result['details'] = [];
+		}
+
+		if ( ! isset( $result['missing_info'] ) || ! is_array( $result['missing_info'] ) ) {
+			$result['missing_info'] = [];
 		}
 
 		return $result;
