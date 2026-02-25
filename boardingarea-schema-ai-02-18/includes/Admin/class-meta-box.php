@@ -26,6 +26,7 @@ final class Meta_Box {
     public const META_KEY_GENERATED_AT  = '_basai_schema_generated_at';
     public const META_KEY_REVIEWED_TYPE = '_basai_schema_reviewed_type';
     public const META_KEY_VALIDATION    = '_basai_schema_validation';
+    public const META_KEY_MISSING_INFO  = '_basai_schema_missing_info'; // New key
 
     public function init(): void {
         add_action( 'add_meta_boxes', [ $this, 'add_meta_box' ] );
@@ -57,6 +58,16 @@ final class Meta_Box {
         $gen_at = (int) get_post_meta( $post->ID, self::META_KEY_GENERATED_AT, true );
         $reviewed = (string) get_post_meta( $post->ID, self::META_KEY_REVIEWED_TYPE, true );
         $validation_raw = (string) get_post_meta( $post->ID, self::META_KEY_VALIDATION, true );
+
+        $missing_info_raw = (string) get_post_meta( $post->ID, self::META_KEY_MISSING_INFO, true );
+        $missing_info = [];
+        if ( '' !== $missing_info_raw ) {
+            $decoded = json_decode( $missing_info_raw, true );
+            if ( is_array( $decoded ) ) {
+                $missing_info = $decoded;
+            }
+        }
+
         $validation = [];
         if ( '' !== $validation_raw ) {
             $decoded_validation = json_decode( $validation_raw, true );
@@ -154,6 +165,21 @@ final class Meta_Box {
                         <span class="dashicons dashicons-warning"></span>
                         <div class="notice-content">
                             <strong>Error:</strong> <?php echo esc_html( $err ); ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ( ! empty( $missing_info ) ) : ?>
+                    <div class="basai-notice basai-notice-warning">
+                        <span class="dashicons dashicons-info-outline"></span>
+                        <div class="notice-content">
+                            <strong>Missing Information Detected:</strong>
+                            <p>The AI suggests adding the following details to your post for better schema coverage:</p>
+                            <ul class="basai-notice-list">
+                                <?php foreach ( $missing_info as $info ) : ?>
+                                    <li><?php echo esc_html( $info ); ?></li>
+                                <?php endforeach; ?>
+                            </ul>
                         </div>
                     </div>
                 <?php endif; ?>
@@ -293,7 +319,23 @@ final class Meta_Box {
             $tmpl = sanitize_text_field( (string) ( $_POST['basai_template_id'] ?? 'Auto' ) );
             $rev  = sanitize_text_field( (string) ( $_POST['basai_reviewed_type'] ?? '' ) );
 
-            Core::save_schema( $post_id, (string) wp_unslash( (string) $_POST[ self::META_KEY_LIVE ] ), $tmpl, $just, '' );
+            // Note: We don't have access to fresh missing_info here (that comes from AJAX generation).
+            // We just save the JSON content and preserve existing missing info if not updating it via AJAX.
+            // However, save_schema expects 6 args now.
+            // In manual save context, we likely don't have new missing info, so we can pass empty array
+            // OR we should retrieve existing?
+            // Actually, manual save implies user edited JSON. Missing info from AI is stale/irrelevant if user manually fixed it.
+            // Ideally, we'd clear it or keep it. Let's look at how AJAX handles it.
+
+            // Wait, this method is for standard WP Post Save.
+            // If the user manually edits the JSON in the textarea and hits "Update" on the post, this runs.
+            // We should probably preserve the existing missing info unless we have a way to re-evaluate it?
+            // Or just pass empty array to clear it since manual edit might have fixed it?
+            // Core::save_schema clears it if empty array is passed? No, check logic.
+            // Logic: if (!empty($missing_info)) update; else delete.
+
+            // So if I pass [], it deletes it. That seems correct for a manual save (AI warnings are cleared until next generation).
+            Core::save_schema( $post_id, (string) wp_unslash( (string) $_POST[ self::META_KEY_LIVE ] ), $tmpl, $just, '', [] );
 
             if ( '' !== $tmpl ) {
                 update_post_meta( $post_id, self::META_KEY_TEMPLATE_ID, $tmpl );
@@ -353,6 +395,7 @@ final class Meta_Box {
         $justification = (string) ( $analysis['justification'] ?? '' );
         $summary       = (string) ( $analysis['summary'] ?? '' );
         $reviewed_type = (string) ( $analysis['details']['reviewed_type'] ?? '' );
+        $missing_info  = is_array( $analysis['missing_info'] ?? null ) ? $analysis['missing_info'] : [];
 
         $schema_arr = $builder->build_complete_schema( $post, $analysis, $final_type );
         $json_str   = wp_json_encode( $schema_arr, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
@@ -362,7 +405,7 @@ final class Meta_Box {
 
         $saved = false;
         if ( $should_save ) {
-            $saved = Core::save_schema( $post_id, $json_str, $final_type, $justification, $summary );
+            $saved = Core::save_schema( $post_id, $json_str, $final_type, $justification, $summary, $missing_info );
             if ( '' !== $reviewed_type ) {
                 update_post_meta( $post_id, self::META_KEY_REVIEWED_TYPE, $reviewed_type );
             }
@@ -377,6 +420,7 @@ final class Meta_Box {
                 'generated_label'=> $label,
                 'reviewed_type' => $reviewed_type,
                 'saved'         => $saved,
+                'missing_info'  => $missing_info, // Pass back to JS if needed for immediate UI update
             ]
         );
     }

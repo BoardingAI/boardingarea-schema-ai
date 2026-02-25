@@ -109,13 +109,11 @@ final class OpenAI_Handler {
 		$common_props = [
 			'justification' => [ 'type' => 'string' ],
 			'summary'       => [ 'type' => 'string' ],
+			'missing_info'  => [ 'type' => 'array', 'items' => [ 'type' => 'string' ] ], // New field
 		];
 
 		// --- Helper to build strict object schema ---
 		$make_schema = function( string $type_name, array $details_props ) use ( $common_props ) {
-			// In strict mode, all properties must be required.
-			// So we make details required, and all its props required (use null for optional).
-
 			$details_required = array_keys( $details_props );
 
 			return [
@@ -124,6 +122,7 @@ final class OpenAI_Handler {
 					'type'          => [ 'type' => 'string', 'const' => $type_name ],
 					'justification' => [ 'type' => 'string' ],
 					'summary'       => [ 'type' => 'string' ],
+					'missing_info'  => [ 'type' => 'array', 'items' => [ 'type' => 'string' ] ],
 					'details'       => [
 						'type' => 'object',
 						'properties' => $details_props,
@@ -131,7 +130,7 @@ final class OpenAI_Handler {
 						'additionalProperties' => false
 					]
 				],
-				'required' => [ 'type', 'justification', 'summary', 'details' ],
+				'required' => [ 'type', 'justification', 'summary', 'missing_info', 'details' ],
 				'additionalProperties' => false
 			];
 		};
@@ -149,29 +148,50 @@ final class OpenAI_Handler {
 			'image' => $str_null,
 		];
 
+		// Geo Definition (Corrected to match builder: latitude/longitude)
+		$geo_def = [
+			'type' => ['object', 'null'],
+			'properties' => [
+				'latitude' => ['type' => 'number'],
+				'longitude' => ['type' => 'number']
+			],
+			'required' => ['latitude', 'longitude'],
+			'additionalProperties' => false
+		];
+
+		// Opening Hours Specification Definition
+		$oh_spec_def = [
+			'type' => ['array', 'null'],
+			'items' => [
+				'type' => 'object',
+				'properties' => [
+					'dayOfWeek' => $str_null,
+					'opens' => $str_null,
+					'closes' => $str_null,
+					'validFrom' => $str_null,
+					'validThrough' => $str_null,
+				],
+				'required' => ['dayOfWeek', 'opens', 'closes', 'validFrom', 'validThrough'],
+				'additionalProperties' => false
+			]
+		];
+
 		// Place/Business props
 		$place_props = array_merge( $thing_props, [
 			'name' => $str_null,
 			'address' => $str_null,
 			'telephone' => $str_null,
-			'priceRange' => $str_null, // "$", "$$"
-			'opening_hours' => $str_null, // "Mo-Fr 09:00-17:00"
-			'geo' => [
-				'type' => ['object', 'null'],
-				'properties' => [
-					'lat' => ['type' => 'number'],
-					'lng' => ['type' => 'number']
-				],
-				'required' => ['lat', 'lng'],
-				'additionalProperties' => false
-			],
+			'priceRange' => $str_null,
+			'opening_hours' => $str_null, // Simple string
+			'opening_hours_spec' => $oh_spec_def, // Structured array
+			'geo' => $geo_def,
 		] );
 
 		// 1. Review
 		$review_schema = $make_schema( 'Review', [
 			'reviewed_type' => [ 'type' => 'string', 'enum' => array_keys( Schema_Builder::get_reviewed_types() ) ],
 			'rating'        => [ 'type' => 'number' ], // 1.0 - 5.0
-			// Specific entity details (all nullable because only one will be populated)
+			// Specific entity details
 			'flight' => [
 				'type' => ['object', 'null'],
 				'properties' => [
@@ -207,7 +227,6 @@ final class OpenAI_Handler {
 				'required' => array_keys(array_merge($thing_props, ['name' => $str_null, 'brand' => $str_null])),
 				'additionalProperties' => false
 			],
-			// Add others as needed (keeping it somewhat concise for context limits)
 			'card' => [
 				'type' => ['object', 'null'],
 				'properties' => [ 'name' => $str_null, 'provider' => $str_null, 'category' => $str_null, 'rating' => $num_null, 'url' => $str_null ],
@@ -234,9 +253,11 @@ final class OpenAI_Handler {
 						'location' => $str_null,
 						'url' => $str_null,
 						'position' => $num_null,
-						'address' => $str_null
+						'address' => $str_null,
+						'startDate' => $str_null, // Added
+						'endDate' => $str_null,   // Added
 					],
-					'required' => ['name', 'location', 'url', 'position', 'address'],
+					'required' => ['name', 'location', 'url', 'position', 'address', 'startDate', 'endDate'],
 					'additionalProperties' => false
 				]
 			],
@@ -318,7 +339,9 @@ final class OpenAI_Handler {
 			'telephone' => $str_null,
 			'geo' => $place_props['geo'],
 			'image' => $str_null,
-			'sameAs' => $arr_null
+			'sameAs' => $arr_null,
+			'opening_hours' => $str_null,
+			'opening_hours_spec' => $oh_spec_def,
 		] );
 
 		// 9. Airline
@@ -417,9 +440,6 @@ final class OpenAI_Handler {
 		unset( $supported['Auto'] );
 		$keys_list = implode( ', ', array_keys( $supported ) );
 
-		$review_types  = Schema_Builder::get_reviewed_types();
-		$reviewed_list = implode( ', ', array_keys( $review_types ) );
-
 		$forced_line = '';
 		if ( 'Auto' !== $forced_type && '' !== $forced_type ) {
 			$forced_line = "\nFORCED TYPE: You MUST return type='{$forced_type}' exactly.\n";
@@ -445,16 +465,14 @@ GLOBAL RULES:
 - Do NOT output HTML entities. Use Unicode.
 - Prefer facts stated in the post content.
 
-REVIEW VS TRIP DISTINCTION (CRITICAL):
-- Choose type="Trip" for journeys, itineraries, guides, trip reports, or multi-stop content (e.g., "Day 1", "Day 2").
-- Choose type="Review" ONLY for specific evaluations of products, services, or places (flight, hotel, lounge, etc.) with a clear rating or verdict.
-- Do NOT classify a Trip as a Review just because it mentions a flight.
+MISSING INFO (CRITICAL):
+- If you select a type (e.g. Review) but cannot find important details (e.g. Rating, Location, ISBN, Brand) in the content, you MUST list them in the 'missing_info' array.
+- Example: "missing_info": ["Rating", "Hotel Address"]
+- Be helpful to the user so they know what to add to their post.
 
-LOUNGE REVIEW RULE:
-If the content is a lounge review:
-- Set type="Review"
-- Set reviewed_type="LocalBusiness"
-- Fill 'lounge' details (name, airport_name, iata, terminal).
+REVIEW VS TRIP DISTINCTION:
+- Choose type="Trip" for journeys, itineraries, guides, trip reports.
+- Choose type="Review" ONLY for specific evaluations with a verdict/rating.
 
 DETAILS:
 - Fill the 'details' object corresponding to your chosen 'type'.
@@ -527,8 +545,6 @@ EOT;
 			if ( in_array( $reviewed_type, [ 'Airline', 'Flight' ], true ) ) {
 				$title = html_entity_decode( (string) $post->post_title, ENT_QUOTES );
 
-				// If title EXPLICITLY says "Review", trust the AI (mostly).
-				// But if title says "Trip Report", trust Trip.
 				$title_lower = strtolower( $title );
 				$has_review_in_title = str_contains( $title_lower, 'review' );
 				$has_trip_in_title   = str_contains( $title_lower, 'trip report' ) || str_contains( $title_lower, 'itinerary' );
@@ -537,13 +553,10 @@ EOT;
 				$is_review_focus = $this->content_indicates_review_focus( $clean_text, $details );
 
 				if ( $has_trip_in_title ) {
-					// Strongest signal: user calls it a trip report.
 					$override = true;
 				} elseif ( $has_review_in_title ) {
-					// Strong signal: user calls it a review. Keep as Review unless it's devoid of review content.
 					$override = false;
 				} elseif ( $is_trip && ! $is_review_focus ) {
-					// Ambiguous title, but content looks like a trip and lacks rating/verdict.
 					$override = true;
 				} else {
 					$override = false;
@@ -554,7 +567,6 @@ EOT;
 					if ( empty( $details['trip_name'] ) || ! is_string( $details['trip_name'] ) ) {
 						$details['trip_name'] = $title;
 					}
-					// Clear review specific fields
 					unset( $details['reviewed_type'], $details['rating'] );
 					$result['justification'] = 'Content appears to describe a trip itinerary/journey (Trip) rather than a review of a single flight/airline.';
 				}

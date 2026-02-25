@@ -47,7 +47,8 @@ final class Core {
 		string $json_content,
 		string $template_id = '',
 		string $ai_justification = '',
-		string $ai_summary = ''
+		string $ai_summary = '',
+		array $missing_info = []
 	): bool {
 		$json_content = trim( $json_content );
 
@@ -61,6 +62,7 @@ final class Core {
 			delete_post_meta( $post_id, Meta_Box::META_KEY_LAST_ERROR );
 			delete_post_meta( $post_id, Meta_Box::META_KEY_GENERATED_AT );
 			delete_post_meta( $post_id, Meta_Box::META_KEY_VALIDATION );
+			delete_post_meta( $post_id, Meta_Box::META_KEY_MISSING_INFO );
 			return true;
 		}
 
@@ -101,6 +103,12 @@ final class Core {
 			if ( '' !== $ai_summary ) {
 				update_post_meta( $post_id, Meta_Box::META_KEY_SUMMARY, sanitize_text_field( $ai_summary ) );
 			}
+			if ( ! empty( $missing_info ) ) {
+				$clean_missing = array_map( 'sanitize_text_field', $missing_info );
+				update_post_meta( $post_id, Meta_Box::META_KEY_MISSING_INFO, wp_json_encode( $clean_missing ) );
+			} else {
+				delete_post_meta( $post_id, Meta_Box::META_KEY_MISSING_INFO );
+			}
 
 			return true;
 		}
@@ -108,6 +116,7 @@ final class Core {
 		// Draft mode: store what user/AI produced for debugging, but DO NOT output.
 		update_post_meta( $post_id, Meta_Box::META_KEY_DRAFT, wp_slash( $json_content ) );
 		delete_post_meta( $post_id, Meta_Box::META_KEY_VALIDATION );
+		delete_post_meta( $post_id, Meta_Box::META_KEY_MISSING_INFO );
 		update_post_meta( $post_id, Meta_Box::META_KEY_LAST_ERROR, 'Invalid JSON: ' . sanitize_text_field( json_last_error_msg() ) );
 
 		return false;
