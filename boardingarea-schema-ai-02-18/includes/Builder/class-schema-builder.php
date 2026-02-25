@@ -14,13 +14,13 @@ final class Schema_Builder {
 	public static function get_supported_types(): array {
 		return [
 			'Auto'        => '✨ Auto-Detect (AI)',
-			'BlogPosting' => 'BlogPosting (Article)',
-			'Article'     => 'Article (Generic)',
-			'NewsArticle' => 'NewsArticle (Breaking/Report)',
+			'BlogPosting' => 'BlogPosting',
+			'Article'     => 'Article',
+			'NewsArticle' => 'NewsArticle',
 			'Review'      => 'Review',
 			'FAQPage'     => 'FAQPage',
 			'HowTo'       => 'HowTo',
-			'ItemList'    => 'ItemList (Roundups)',
+			'ItemList'    => 'ItemList',
 			'VideoObject' => 'VideoObject',
 			'Product'     => 'Product',
 			'Trip'        => 'Trip',
@@ -38,7 +38,7 @@ final class Schema_Builder {
 			'SoftwareApplication' => 'SoftwareApplication',
 			'CreditCard'          => 'CreditCard',
 			'FinancialProduct'    => 'FinancialProduct',
-			'LocalBusiness'       => 'LocalBusiness (Lounge)',
+			'LocalBusiness'       => 'LocalBusiness',
 			'Place'               => 'Place',
 			'Product'             => 'Product',
 		];

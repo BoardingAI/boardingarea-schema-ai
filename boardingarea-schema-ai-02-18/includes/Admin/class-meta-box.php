@@ -132,11 +132,8 @@ final class Meta_Box {
                         </select>
                     </div>
 
-                    <button type="button" id="basai-generate-btn" class="button button-primary basai-btn-large">
+                    <button type="button" id="basai-generate-save-btn" class="button button-primary basai-btn-large">
                         <span class="dashicons dashicons-update"></span> Generate Schema
-                    </button>
-                    <button type="button" id="basai-generate-save-btn" class="button button-secondary basai-btn-large">
-                        <span class="dashicons dashicons-yes"></span> Generate &amp; Save
                     </button>
                 </div>
 

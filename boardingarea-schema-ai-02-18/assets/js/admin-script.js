@@ -1,6 +1,5 @@
 jQuery(document).ready(function ($) {
     const $genBtn = $('#basai-generate-btn');
-    const $genSaveBtn = $('#basai-generate-save-btn');
     const $typeSelector = $('#basai-type-selector');
     const $reviewSelector = $('#basai-reviewed-selector');
     const $reviewControl = $('.basai-review-control');
@@ -1253,7 +1252,7 @@ jQuery(document).ready(function ($) {
         if ($card.length) toggleCollapsible($card);
     });
 
-    function runGenerate(save = false) {
+    function runGenerate(save = true) {
         const selectedType = $typeSelector.val();
         const selectedReviewed = $reviewSelector.val();
         const isAuto = (selectedType === 'Auto');
@@ -1261,7 +1260,9 @@ jQuery(document).ready(function ($) {
         const workingMsg = isAuto ? 'AI Detecting & Building...' : 'Building ' + typeLabel + '...';
 
         $genBtn.prop('disabled', true);
-        $genSaveBtn.prop('disabled', true);
+        const $genSaveBtn = $('#basai-generate-save-btn'); // Local definition for unified logic
+        if ($genSaveBtn.length) $genSaveBtn.prop('disabled', true);
+
         $loader.addClass('visible');
         updateStatus(workingMsg, 'working');
 
@@ -1313,20 +1314,16 @@ jQuery(document).ready(function ($) {
             },
             complete: function () {
                 $genBtn.prop('disabled', false);
-                $genSaveBtn.prop('disabled', false);
+                if ($genSaveBtn.length) $genSaveBtn.prop('disabled', false);
                 $loader.removeClass('visible');
             }
         });
     }
 
-    $genBtn.on('click', function (e) {
+    // Consolidated Button Handler
+    $('#basai-generate-save-btn').on('click', function (e) {
         e.preventDefault();
-        runGenerate(false);
-    });
-
-    $genSaveBtn.on('click', function (e) {
-        e.preventDefault();
-        runGenerate(true);
+        runGenerate(true); // Always save with unified button
     });
 
     $('#basai-validate-btn').on('click', function (e) {
