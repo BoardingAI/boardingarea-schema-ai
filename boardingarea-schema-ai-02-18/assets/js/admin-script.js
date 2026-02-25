@@ -1,5 +1,4 @@
 jQuery(document).ready(function ($) {
-    const $genBtn = $('#basai-generate-btn');
     const $typeSelector = $('#basai-type-selector');
     const $reviewSelector = $('#basai-reviewed-selector');
     const $reviewControl = $('.basai-review-control');
@@ -1259,8 +1258,7 @@ jQuery(document).ready(function ($) {
         const typeLabel = $typeSelector.find('option:selected').text().trim();
         const workingMsg = isAuto ? 'AI Detecting & Building...' : 'Building ' + typeLabel + '...';
 
-        $genBtn.prop('disabled', true);
-        const $genSaveBtn = $('#basai-generate-save-btn'); // Local definition for unified logic
+        const $genSaveBtn = $('#basai-generate-save-btn');
         if ($genSaveBtn.length) $genSaveBtn.prop('disabled', true);
 
         $loader.addClass('visible');
@@ -1313,7 +1311,6 @@ jQuery(document).ready(function ($) {
                 updateStatus('Server Error', 'error');
             },
             complete: function () {
-                $genBtn.prop('disabled', false);
                 if ($genSaveBtn.length) $genSaveBtn.prop('disabled', false);
                 $loader.removeClass('visible');
             }

@@ -222,8 +222,14 @@ final class Schema_Validator {
 	private static function validate_node_formats( array $node, string $path, array &$report ): void {
 		foreach ( $node as $key => $val ) {
 			if ( is_array( $val ) ) {
-				// Recurse for nested objects (e.g. address) that might not be top-level nodes
-				if ( array_keys( $val ) !== range( 0, count( $val ) - 1 ) ) {
+				$is_list = array_keys( $val ) === range( 0, count( $val ) - 1 );
+				if ( $is_list ) {
+					foreach ( $val as $idx => $item ) {
+						if ( is_array( $item ) ) {
+							self::validate_node_formats( $item, $path . '.' . $key . '[' . (int) $idx . ']', $report );
+						}
+					}
+				} else {
 					self::validate_node_formats( $val, $path . '.' . $key, $report );
 				}
 				continue;
@@ -256,8 +262,9 @@ final class Schema_Validator {
 
 			// Rating
 			if ( $key === 'ratingValue' ) {
-				if ( ! is_numeric( $val ) || $val < 0 || $val > 5 ) {
-					 self::add_issue( $report, 'warning', "Property 'ratingValue' should be between 0 and 5: $val_str", ['path' => "$path.$key"] );
+				$num = is_numeric( $val ) ? (float) $val : null;
+				if ( null === $num || $num < 1.0 || $num > 5.0 ) {
+					 self::add_issue( $report, 'warning', "Property 'ratingValue' should be between 1 and 5: $val_str", ['path' => "$path.$key"] );
 				}
 			}
 		}
@@ -285,8 +292,11 @@ final class Schema_Validator {
 	}
 
 	private static function is_valid_duration( string $duration ): bool {
-		// Regex for ISO 8601 duration (e.g. PT1H30M)
-		return (bool) preg_match( '/^P/', $duration );
+		// ISO 8601 duration (e.g. P1D, PT2H30M, P3Y6M4DT12H30M5S)
+		return (bool) preg_match(
+			'/^P(?=\d|T\d)(\d+Y)?(\d+M)?(\d+W)?(\d+D)?(T(\d+H)?(\d+M)?(\d+S)?)?$/',
+			$duration
+		);
 	}
 
 	private static function validate_node_with_rules(

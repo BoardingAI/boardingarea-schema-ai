@@ -105,7 +105,10 @@ final class Core {
 			}
 			if ( ! empty( $missing_info ) ) {
 				$clean_missing = array_map( 'sanitize_text_field', $missing_info );
-				update_post_meta( $post_id, Meta_Box::META_KEY_MISSING_INFO, wp_json_encode( $clean_missing ) );
+				$encoded = wp_json_encode( $clean_missing );
+				if ( false !== $encoded ) {
+					update_post_meta( $post_id, Meta_Box::META_KEY_MISSING_INFO, $encoded );
+				}
 			} else {
 				delete_post_meta( $post_id, Meta_Box::META_KEY_MISSING_INFO );
 			}

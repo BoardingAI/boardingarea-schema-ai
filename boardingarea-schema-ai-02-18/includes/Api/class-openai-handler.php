@@ -239,6 +239,19 @@ final class OpenAI_Handler {
 				'required' => ['name', 'category', 'os', 'version', 'rating', 'url', 'image'],
 				'additionalProperties' => false
 			],
+			// Added 'airline' and 'financial_product' as requested
+			'airline' => [
+				'type' => ['object', 'null'],
+				'properties' => [ 'name' => $str_null, 'iata' => $str_null, 'url' => $str_null, 'rating' => $num_null ],
+				'required' => ['name', 'iata', 'url', 'rating'],
+				'additionalProperties' => false
+			],
+			'financial_product' => [
+				'type' => ['object', 'null'],
+				'properties' => [ 'name' => $str_null, 'provider' => $str_null, 'category' => $str_null, 'rating' => $num_null, 'url' => $str_null ],
+				'required' => ['name', 'provider', 'category', 'rating', 'url'],
+				'additionalProperties' => false
+			],
 		] );
 
 		// 2. Trip
@@ -421,8 +434,11 @@ final class OpenAI_Handler {
 			return new WP_Error( 'basai_openai_invalid_json', 'AI output was not valid JSON.' );
 		}
 
-		// Unwrap the 'result' wrapper needed for strict schema oneOf root
-		if ( isset( $result['result'] ) ) {
+		// Unwrap the 'result' wrapper needed for strict schema root.
+		if ( array_key_exists( 'result', $result ) ) {
+			if ( ! is_array( $result['result'] ) ) {
+				return new WP_Error( 'basai_openai_invalid_shape', 'AI output "result" must be an object.' );
+			}
 			$result = $result['result'];
 		}
 
@@ -572,10 +588,17 @@ EOT;
 
 				if ( isset( $override ) && $override ) {
 					$result['type'] = 'Trip';
-					if ( empty( $details['trip_name'] ) || ! is_string( $details['trip_name'] ) ) {
-						$details['trip_name'] = $title;
-					}
-					unset( $details['reviewed_type'], $details['rating'] );
+					$trip_name = ( ! empty( $details['trip_name'] ) && is_string( $details['trip_name'] ) ) ? $details['trip_name'] : $title;
+					$itinerary = ( isset( $details['itinerary'] ) && is_array( $details['itinerary'] ) ) ? $details['itinerary'] : [];
+					$image     = ( isset( $details['image'] ) && ( is_string( $details['image'] ) || is_null( $details['image'] ) ) ) ? $details['image'] : null;
+					$offers    = ( isset( $details['offers'] ) && ( is_array( $details['offers'] ) || is_null( $details['offers'] ) ) ) ? $details['offers'] : null;
+
+					$details = [
+						'trip_name' => $trip_name,
+						'itinerary' => $itinerary,
+						'image'     => $image,
+						'offers'    => $offers,
+					];
 					$result['justification'] = 'Content appears to describe a trip itinerary/journey (Trip) rather than a review of a single flight/airline.';
 				}
 			}

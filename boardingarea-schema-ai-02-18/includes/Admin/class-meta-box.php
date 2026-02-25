@@ -191,7 +191,9 @@ final class Meta_Box {
                             <p>The AI suggests adding the following details to your post for better schema coverage:</p>
                             <ul class="basai-notice-list">
                                 <?php foreach ( $missing_info as $info ) : ?>
-                                    <li><?php echo esc_html( $info ); ?></li>
+                                    <?php if ( is_string( $info ) && '' !== $info ) : ?>
+                                        <li><?php echo esc_html( $info ); ?></li>
+                                    <?php endif; ?>
                                 <?php endforeach; ?>
                             </ul>
                         </div>
@@ -322,22 +324,7 @@ final class Meta_Box {
             $tmpl = sanitize_text_field( (string) ( $_POST['basai_template_id'] ?? 'Auto' ) );
             $rev  = sanitize_text_field( (string) ( $_POST['basai_reviewed_type'] ?? '' ) );
 
-            // Note: We don't have access to fresh missing_info here (that comes from AJAX generation).
-            // We just save the JSON content and preserve existing missing info if not updating it via AJAX.
-            // However, save_schema expects 6 args now.
-            // In manual save context, we likely don't have new missing info, so we can pass empty array
-            // OR we should retrieve existing?
-            // Actually, manual save implies user edited JSON. Missing info from AI is stale/irrelevant if user manually fixed it.
-            // Ideally, we'd clear it or keep it. Let's look at how AJAX handles it.
-
-            // Wait, this method is for standard WP Post Save.
-            // If the user manually edits the JSON in the textarea and hits "Update" on the post, this runs.
-            // We should probably preserve the existing missing info unless we have a way to re-evaluate it?
-            // Or just pass empty array to clear it since manual edit might have fixed it?
-            // Core::save_schema clears it if empty array is passed? No, check logic.
-            // Logic: if (!empty($missing_info)) update; else delete.
-
-            // So if I pass [], it deletes it. That seems correct for a manual save (AI warnings are cleared until next generation).
+            // Manual save: clear AI missing_info since the user may have addressed it.
             Core::save_schema( $post_id, (string) wp_unslash( (string) $_POST[ self::META_KEY_LIVE ] ), $tmpl, $just, '', [] );
 
             if ( '' !== $tmpl ) {
