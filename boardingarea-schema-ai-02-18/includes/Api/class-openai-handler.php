@@ -33,7 +33,6 @@ final class OpenAI_Handler {
 			return new WP_Error( 'basai_missing_key', 'OpenAI API Key is missing.' );
 		}
 
-		// Decode entities early to avoid pushing &#8216; etc into AI output.
 		$title_raw   = (string) $post->post_title;
 		$content_raw = (string) $post->post_content;
 
@@ -44,7 +43,6 @@ final class OpenAI_Handler {
 			$clean_text = substr( $clean_text, 0, 30000 );
 		}
 
-		// Provide safe, trimmed HTML to support FAQ answers with markup and list extraction fidelity.
 		$clean_html = $this->clean_content_html( $content_raw );
 		if ( strlen( $clean_html ) > 30000 ) {
 			$clean_html = substr( $clean_html, 0, 30000 );
@@ -55,7 +53,6 @@ final class OpenAI_Handler {
 			: (string) wp_trim_words( (string) $post->post_content, 60 );
 		$excerpt = html_entity_decode( $excerpt, ENT_QUOTES );
 
-		// Optional: lightweight list hints for ItemList extraction robustness (does not force ItemList type).
 		$list_hints = $this->extract_list_hints_from_html( $content_raw, 25 );
 
 		$system_prompt = $this->get_system_prompt( $forced_template_id, $forced_reviewed_type );
@@ -76,10 +73,7 @@ final class OpenAI_Handler {
 			}
 		}
 
-		// Apply conservative post-processing fixes (classification/extraction robustness).
-		$response = $this->apply_post_ai_fixes( $response, $post, $clean_text, $clean_html, $list_hints );
-
-		return $response;
+		return $this->apply_post_ai_fixes( $response, $post, $clean_text, $clean_html, $list_hints );
 	}
 
 	private function build_payload( string $system_prompt, string $user_message, bool $strict ): array {
@@ -108,23 +102,296 @@ final class OpenAI_Handler {
 		return $payload;
 	}
 
+	/**
+	 * Strict Schema Definition using oneOf to enforce structure per Type.
+	 */
 	private function json_schema_definition(): array {
-		$supported = Schema_Builder::get_supported_types();
-		unset( $supported['Auto'] );
+		$common_props = [
+			'justification' => [ 'type' => 'string' ],
+			'summary'       => [ 'type' => 'string' ],
+			'missing_info'  => [ 'type' => 'array', 'items' => [ 'type' => 'string' ] ], // New field
+		];
+
+		// --- Helper to build strict object schema ---
+		$make_schema = function( string $type_name, array $details_props ) use ( $common_props ) {
+			$details_required = array_keys( $details_props );
+
+			return [
+				'type' => 'object',
+				'properties' => [
+					'type'          => [ 'type' => 'string', 'const' => $type_name ],
+					'justification' => [ 'type' => 'string' ],
+					'summary'       => [ 'type' => 'string' ],
+					'missing_info'  => [ 'type' => 'array', 'items' => [ 'type' => 'string' ] ],
+					'details'       => [
+						'type' => 'object',
+						'properties' => $details_props,
+						'required' => $details_required,
+						'additionalProperties' => false
+					]
+				],
+				'required' => [ 'type', 'justification', 'summary', 'missing_info', 'details' ],
+				'additionalProperties' => false
+			];
+		};
+
+		// --- Reusable Property Definitions (Strict: nullable for optional) ---
+		$str_null  = [ 'type' => [ 'string', 'null' ] ];
+		$num_null  = [ 'type' => [ 'number', 'null' ] ];
+		$arr_str   = [ 'type' => 'array', 'items' => [ 'type' => 'string' ] ];
+		$arr_null  = [ 'type' => [ 'array', 'null' ], 'items' => [ 'type' => 'string' ] ];
+
+		// Common Thing props
+		$thing_props = [
+			'url' => $str_null,
+			'sameAs' => $arr_null,
+			'image' => $str_null,
+		];
+
+		// Geo Definition (Corrected to match builder: latitude/longitude)
+		$geo_def = [
+			'type' => ['object', 'null'],
+			'properties' => [
+				'latitude' => ['type' => 'number'],
+				'longitude' => ['type' => 'number']
+			],
+			'required' => ['latitude', 'longitude'],
+			'additionalProperties' => false
+		];
+
+		// Opening Hours Specification Definition
+		$oh_spec_def = [
+			'type' => ['array', 'null'],
+			'items' => [
+				'type' => 'object',
+				'properties' => [
+					'dayOfWeek' => $str_null,
+					'opens' => $str_null,
+					'closes' => $str_null,
+					'validFrom' => $str_null,
+					'validThrough' => $str_null,
+				],
+				'required' => ['dayOfWeek', 'opens', 'closes', 'validFrom', 'validThrough'],
+				'additionalProperties' => false
+			]
+		];
+
+		// Place/Business props
+		$place_props = array_merge( $thing_props, [
+			'name' => $str_null,
+			'address' => $str_null,
+			'telephone' => $str_null,
+			'priceRange' => $str_null,
+			'opening_hours' => $str_null, // Simple string
+			'opening_hours_spec' => $oh_spec_def, // Structured array
+			'geo' => $geo_def,
+		] );
+
+		// 1. Review
+		$review_schema = $make_schema( 'Review', [
+			'reviewed_type' => [ 'type' => 'string', 'enum' => array_keys( Schema_Builder::get_reviewed_types() ) ],
+			'rating'        => [ 'type' => 'number' ], // 1.0 - 5.0
+			// Specific entity details
+			'flight' => [
+				'type' => ['object', 'null'],
+				'properties' => [
+					'airline_name' => $str_null,
+					'iata' => $str_null,
+					'flight_number' => $str_null,
+					'url' => $str_null
+				],
+				'required' => ['airline_name', 'iata', 'flight_number', 'url'],
+				'additionalProperties' => false
+			],
+			'hotel' => [
+				'type' => ['object', 'null'],
+				'properties' => array_merge($place_props, ['star_rating' => $num_null, 'rating' => $num_null]),
+				'required' => array_keys(array_merge($place_props, ['star_rating' => $num_null, 'rating' => $num_null])),
+				'additionalProperties' => false
+			],
+			'lounge' => [
+				'type' => ['object', 'null'],
+				'properties' => array_merge($place_props, ['airport_name' => $str_null, 'iata' => $str_null, 'terminal' => $str_null, 'rating' => $num_null]),
+				'required' => array_keys(array_merge($place_props, ['airport_name' => $str_null, 'iata' => $str_null, 'terminal' => $str_null, 'rating' => $num_null])),
+				'additionalProperties' => false
+			],
+			'restaurant' => [
+				'type' => ['object', 'null'],
+				'properties' => array_merge($place_props, ['cuisine' => $str_null, 'menu' => $str_null, 'rating' => $num_null]),
+				'required' => array_keys(array_merge($place_props, ['cuisine' => $str_null, 'menu' => $str_null, 'rating' => $num_null])),
+				'additionalProperties' => false
+			],
+			'product' => [
+				'type' => ['object', 'null'],
+				'properties' => array_merge($thing_props, ['name' => $str_null, 'brand' => $str_null]),
+				'required' => array_keys(array_merge($thing_props, ['name' => $str_null, 'brand' => $str_null])),
+				'additionalProperties' => false
+			],
+			'card' => [
+				'type' => ['object', 'null'],
+				'properties' => [ 'name' => $str_null, 'provider' => $str_null, 'category' => $str_null, 'rating' => $num_null, 'url' => $str_null ],
+				'required' => ['name', 'provider', 'category', 'rating', 'url'],
+				'additionalProperties' => false
+			],
+			'software' => [
+				'type' => ['object', 'null'],
+				'properties' => [ 'name' => $str_null, 'category' => $str_null, 'os' => $str_null, 'version' => $str_null, 'rating' => $num_null, 'url' => $str_null, 'image' => $str_null ],
+				'required' => ['name', 'category', 'os', 'version', 'rating', 'url', 'image'],
+				'additionalProperties' => false
+			],
+			// Added 'airline' and 'financial_product' as requested
+			'airline' => [
+				'type' => ['object', 'null'],
+				'properties' => [ 'name' => $str_null, 'iata' => $str_null, 'url' => $str_null, 'rating' => $num_null ],
+				'required' => ['name', 'iata', 'url', 'rating'],
+				'additionalProperties' => false
+			],
+			'financial_product' => [
+				'type' => ['object', 'null'],
+				'properties' => [ 'name' => $str_null, 'provider' => $str_null, 'category' => $str_null, 'rating' => $num_null, 'url' => $str_null ],
+				'required' => ['name', 'provider', 'category', 'rating', 'url'],
+				'additionalProperties' => false
+			],
+		] );
+
+		// 2. Trip
+		$trip_schema = $make_schema( 'Trip', [
+			'trip_name' => [ 'type' => 'string' ],
+			'itinerary' => [
+				'type' => 'array',
+				'items' => [
+					'type' => 'object',
+					'properties' => [
+						'name' => $str_null,
+						'location' => $str_null,
+						'url' => $str_null,
+						'position' => $num_null,
+						'address' => $str_null,
+						'startDate' => $str_null, // Added
+						'endDate' => $str_null,   // Added
+					],
+					'required' => ['name', 'location', 'url', 'position', 'address', 'startDate', 'endDate'],
+					'additionalProperties' => false
+				]
+			],
+			'image' => $str_null,
+			'offers' => [ // Optional pricing info
+				'type' => ['object', 'null'],
+				'properties' => [ 'price' => $str_null, 'priceCurrency' => $str_null, 'url' => $str_null ],
+				'required' => ['price', 'priceCurrency', 'url'],
+				'additionalProperties' => false
+			]
+		] );
+
+		// 3. FAQPage
+		$faq_schema = $make_schema( 'FAQPage', [
+			'faq' => [
+				'type' => 'array',
+				'items' => [
+					'type' => 'object',
+					'properties' => [ 'q' => ['type'=>'string'], 'a' => ['type'=>'string'] ],
+					'required' => ['q', 'a'],
+					'additionalProperties' => false
+				]
+			]
+		] );
+
+		// 4. HowTo
+		$howto_schema = $make_schema( 'HowTo', [
+			'howto_steps' => [ 'type' => 'array', 'items' => [ 'type' => 'string' ] ],
+			'totalTime' => $str_null,
+			'image' => $str_null
+		] );
+
+		// 5. ItemList
+		$itemlist_schema = $make_schema( 'ItemList', [
+			'itemlist' => [
+				'type' => 'array',
+				'items' => [
+					'type' => 'object',
+					'properties' => [ 'name' => ['type'=>'string'], 'url' => $str_null ],
+					'required' => ['name', 'url'],
+					'additionalProperties' => false
+				]
+			]
+		] );
+
+		// 6. VideoObject
+		$video_schema = $make_schema( 'VideoObject', [
+			'video' => [
+				'type' => 'object',
+				'properties' => [
+					'name' => $str_null,
+					'description' => $str_null,
+					'thumbnail' => $str_null,
+					'upload_date' => $str_null,
+					'duration' => $str_null, // ISO8601
+					'embed_url' => $str_null,
+					'content_url' => $str_null
+				],
+				'required' => ['name', 'description', 'thumbnail', 'upload_date', 'duration', 'embed_url', 'content_url'],
+				'additionalProperties' => false
+			]
+		] );
+
+		// 7. Product (Simple)
+		$product_schema = $make_schema( 'Product', [
+			'product' => [
+				'type' => 'object',
+				'properties' => array_merge($thing_props, ['name' => $str_null, 'brand' => $str_null]),
+				'required' => array_keys(array_merge($thing_props, ['name' => $str_null, 'brand' => $str_null])),
+				'additionalProperties' => false
+			]
+		] );
+
+		// 8. Place
+		$place_schema = $make_schema( 'Place', [
+			'place_name' => $str_null,
+			'address' => $str_null,
+			'url' => $str_null,
+			'telephone' => $str_null,
+			'geo' => $place_props['geo'],
+			'image' => $str_null,
+			'sameAs' => $arr_null,
+			'opening_hours' => $str_null,
+			'opening_hours_spec' => $oh_spec_def,
+		] );
+
+		// 9. Airline
+		$airline_schema = $make_schema( 'Airline', [
+			'airline_name' => $str_null,
+			'iata' => $str_null,
+			'url' => $str_null,
+			'sameAs' => $arr_null
+		] );
+
+		// 10. Generic / BlogPosting / Article / NewsArticle (No extra details needed)
+		$generic_schema = $make_schema( 'BlogPosting', [] );
+		$article_schema = $make_schema( 'Article', [] );
+		$news_schema    = $make_schema( 'NewsArticle', [] );
 
 		return [
-			'type'                 => 'object',
-			'additionalProperties' => false,
-			'required'             => [ 'type', 'justification', 'summary', 'details' ],
-			'properties'           => [
-				'type'          => [
-					'type' => 'string',
-					'enum' => array_keys( $supported ),
-				],
-				'justification' => [ 'type' => 'string', 'minLength' => 5, 'maxLength' => 280 ],
-				'summary'       => [ 'type' => 'string', 'minLength' => 0, 'maxLength' => 200 ],
-				'details'       => [ 'type' => 'object', 'additionalProperties' => true ],
+			'type' => 'object',
+			'properties' => [
+				'result' => [
+					'anyOf' => [
+						$review_schema,
+						$trip_schema,
+						$faq_schema,
+						$howto_schema,
+						$itemlist_schema,
+						$video_schema,
+						$product_schema,
+						$place_schema,
+						$airline_schema,
+						$generic_schema,
+						$article_schema,
+						$news_schema
+					]
+				]
 			],
+			'required' => ['result'],
+			'additionalProperties' => false
 		];
 	}
 
@@ -167,10 +434,26 @@ final class OpenAI_Handler {
 			return new WP_Error( 'basai_openai_invalid_json', 'AI output was not valid JSON.' );
 		}
 
-		foreach ( [ 'type', 'justification', 'summary', 'details' ] as $k ) {
+		// Unwrap the 'result' wrapper needed for strict schema root.
+		if ( array_key_exists( 'result', $result ) ) {
+			if ( ! is_array( $result['result'] ) ) {
+				return new WP_Error( 'basai_openai_invalid_shape', 'AI output "result" must be an object.' );
+			}
+			$result = $result['result'];
+		}
+
+		foreach ( [ 'type', 'justification', 'summary' ] as $k ) {
 			if ( ! array_key_exists( $k, $result ) ) {
 				return new WP_Error( 'basai_openai_missing_keys', 'AI output missing required keys.' );
 			}
+		}
+
+		if ( ! isset( $result['details'] ) || ! is_array( $result['details'] ) ) {
+			$result['details'] = [];
+		}
+
+		if ( ! isset( $result['missing_info'] ) || ! is_array( $result['missing_info'] ) ) {
+			$result['missing_info'] = [];
 		}
 
 		return $result;
@@ -180,9 +463,6 @@ final class OpenAI_Handler {
 		$supported = Schema_Builder::get_supported_types();
 		unset( $supported['Auto'] );
 		$keys_list = implode( ', ', array_keys( $supported ) );
-
-		$review_types  = Schema_Builder::get_reviewed_types();
-		$reviewed_list = implode( ', ', array_keys( $review_types ) );
 
 		$forced_line = '';
 		if ( 'Auto' !== $forced_type && '' !== $forced_type ) {
@@ -196,7 +476,9 @@ final class OpenAI_Handler {
 
 		return <<<EOT
 You are a schema classification and extraction assistant for BoardingArea.
-You ONLY output a JSON object (not JSON-LD) selecting a REAL schema.org type from this list:
+You MUST output a JSON object where the 'result' field contains the schema extraction.
+
+Select a REAL schema.org type from this list:
 [{$keys_list}]
 
 {$forced_line}{$forced_reviewed_line}
@@ -204,105 +486,25 @@ You ONLY output a JSON object (not JSON-LD) selecting a REAL schema.org type fro
 GLOBAL RULES:
 - ONLY choose from the list above.
 - Do NOT invent types.
-- Do NOT output HTML entities like &#8216; or &amp;. Use the actual character (Unicode) instead.
-- Extract details relevant to the chosen schema type, with high precision.
-- Prefer facts stated in the post content. Do not guess.
+- Do NOT output HTML entities. Use Unicode.
+- Prefer facts stated in the post content.
 
-REVIEW VS TRIP DISTINCTION (CRITICAL):
-- Choose type="Trip" when the post is primarily about a journey/itinerary/destination sequence (multi-stop, multi-day, guides, trip reports),
-  even if flights/hotels are mentioned.
-- Choose type="Review" ONLY when the primary purpose is evaluating a specific product/service/entity (flight, hotel, lounge, restaurant, credit card, software, product, place).
-- If the post includes an itinerary, "Day 1/Day 2", or multiple stops/attractions, that strongly indicates Trip.
+MISSING INFO (CRITICAL):
+- If you select a type (e.g. Review) but cannot find important details (e.g. Rating, Location, ISBN, Brand) in the content, you MUST list them in the 'missing_info' array.
+- Example: "missing_info": ["Rating", "Hotel Address"]
+- Be helpful to the user so they know what to add to their post.
 
-REVIEW RULES:
-- If type=Review, you MUST include "reviewed_type".
-- reviewed_type MUST be one of: {$reviewed_list}
-- For any review: include details.rating as a numeric 1–5 value.
-- Do not classify Trip content as "Review - Flight" just because a flight is mentioned.
+REVIEW VS TRIP DISTINCTION:
+- Choose type="Trip" for journeys, itineraries, guides, trip reports.
+- Choose type="Review" ONLY for specific evaluations with a verdict/rating.
 
-LOUNGE REVIEW RULE:
-If the content is a lounge review, set:
-type="Review" and reviewed_type="LocalBusiness"
-and include lounge.name + lounge.airport_name + lounge.iata + lounge.terminal.
-
-FAQ HTML RULE:
-- For FAQPage extraction: answers MAY contain SAFE HTML markup (e.g. <p>, <br>, <ul>, <ol>, <li>, <strong>, <em>, <a href="...">).
-- Preserve meaningful formatting if present in CONTENT_HTML. Do NOT include scripts/styles.
-
-IMPORTANT:
-When possible, extract valid schema.org properties for the reviewed entity:
-- url
-- telephone
-- opening_hours (string like "Mo-Fr 09:00-17:00")
-- opening_hours_spec (OpeningHoursSpecification array)
-- geo (latitude/longitude)
-- sameAs (array)
-- address (string or structured object)
-- priceRange (prefer "$", "$$", "$$$", "$$$$" when a tier is implied; keep short)
-- image (URL)
-
-OPENING HOURS QUALITY RULE:
-- If you find multiple conflicting schedules (seasonal/special hours), only include multiple rows if you can provide validFrom/validThrough.
-- Otherwise, provide ONE consistent schedule per dayOfWeek.
-
-Ensure each schema type has the relevant detail fields:
-Review:
-- reviewed_type + rating + matching object (flight/hotel/restaurant/etc)
-FAQPage:
-- details.faq = [{"q":"...","a":"..."}]
-HowTo:
-- details.howto_steps = ["Step 1", "Step 2", ...]
-ItemList:
-- details.itemlist = [{"name":"","url":""}] (extract from lists/sections; prefer >= 5 items when available)
-VideoObject:
-- details.video {name, description, thumbnail, upload_date, duration, embed_url, content_url}
-Product:
-- details.product {name, brand, url, sameAs}
-Trip:
-- details.trip_name
-- details.itinerary = [{"name":"","location":"","url":"","position":1,"startDate":"","endDate":""}] when possible
-- details.provider = {"name":"","url":""} if a tour/company is organizing it; if self-guided, omit provider and focus on itinerary/destination
-- details.offers = {"price":"","priceCurrency":"","url":""} if costs/prices are mentioned
-Place:
-- details.place_name + details.address + url + telephone + opening_hours_spec + geo + sameAs + image
-Airline:
-- details.airline_name + details.iata + url + sameAs
-
-OUTPUT JSON FORMAT:
-{
-  "type": "One schema.org type",
-  "justification": "1-2 sentences",
-  "summary": "short summary",
-  "details": {
-    "reviewed_type": "{$reviewed_list}",
-    "rating": 4.5,
-    "flight": {"airline_name":"","iata":"","flight_number":""},
-    "hotel": {"name":"","location":"","address":"","star_rating":4.0,"rating":4.2,"url":"","telephone":"","opening_hours":"","opening_hours_spec":[{"dayOfWeek":"Monday","opens":"09:00","closes":"17:00","validFrom":"","validThrough":""}],"geo":{"latitude":0,"longitude":0},"sameAs":[""],"priceRange":"","image":""},
-    "lounge": {"name":"","airport_name":"","iata":"","terminal":"","rating":4.0,"url":"","telephone":"","opening_hours":"","opening_hours_spec":[{"dayOfWeek":"Monday","opens":"09:00","closes":"17:00","validFrom":"","validThrough":""}],"geo":{"latitude":0,"longitude":0},"sameAs":[""],"priceRange":"","image":""},
-    "card": {"name":"","provider":"","annual_percentage_rate":"","fees":"","interest_rate":"","category":"","rating":4.0},
-    "software": {"name":"","category":"","os":"","version":"","rating":4.0},
-    "restaurant": {"name":"","location":"","cuisine":"","price_range":"$$","rating":4.0,"url":"","telephone":"","opening_hours":"","opening_hours_spec":[{"dayOfWeek":"Monday","opens":"09:00","closes":"17:00","validFrom":"","validThrough":""}],"geo":{"latitude":0,"longitude":0},"sameAs":[""],"priceRange":"","image":""},
-    "product": {"name":"","brand":"","url":"","sameAs":[""]},
-    "faq": [{"q":"","a":""}],
-    "howto_steps": ["..."],
-    "itemlist": [{"name":"","url":""}],
-    "video": {"name":"","description":"","thumbnail":"","upload_date":"","duration":"","embed_url":"","content_url":""},
-    "trip_name": "",
-    "itinerary": [{"name":"","location":"","url":"","position":1,"startDate":"","endDate":""}],
-    "provider": {"name":"","url":""},
-    "offers": {"price":"","priceCurrency":"","url":""},
-    "place_name": "",
-    "address": "",
-    "airline_name": "",
-    "iata": ""
-  }
-}
+DETAILS:
+- Fill the 'details' object corresponding to your chosen 'type'.
+- Leave unrelated detail fields null.
+- For Review, strictly set 'reviewed_type' and 'rating' (1-5).
 EOT;
 	}
 
-	/**
-	 * Clean content into plain text (for AI classification context).
-	 */
 	private function clean_content_text( string $html ): string {
 		$html = preg_replace( '/<script\b[^>]*>(.*?)<\/script>/is', '', $html );
 		$html = preg_replace( '/<style\b[^>]*>(.*?)<\/style>/is', '', $html );
@@ -314,65 +516,30 @@ EOT;
 		return (string) $text;
 	}
 
-	/**
-	 * Clean content into SAFE HTML (for FAQ/List fidelity) — strips scripts/styles and allows only a small tag set.
-	 */
 	private function clean_content_html( string $html ): string {
 		$html = preg_replace( '/<script\b[^>]*>(.*?)<\/script>/is', '', $html );
 		$html = preg_replace( '/<style\b[^>]*>(.*?)<\/style>/is', '', $html );
-
-		// Remove common WP shortcodes (best-effort) to reduce noise.
 		$html = preg_replace( '/\[[^\]]+\]/', ' ', $html );
 
 		$allowed = [
-			'p'          => [],
-			'br'         => [],
-			'ul'         => [],
-			'ol'         => [],
-			'li'         => [],
-			'strong'     => [],
-			'em'         => [],
-			'b'          => [],
-			'i'          => [],
-			'a'          => [
-				'href'  => true,
-				'title' => true,
-			],
-			'h1'         => [],
-			'h2'         => [],
-			'h3'         => [],
-			'h4'         => [],
-			'h5'         => [],
-			'h6'         => [],
-			'blockquote' => [],
-			'code'       => [],
+			'p' => [], 'br' => [], 'ul' => [], 'ol' => [], 'li' => [],
+			'strong' => [], 'em' => [], 'b' => [], 'i' => [],
+			'a' => [ 'href' => true, 'title' => true ],
+			'h1' => [], 'h2' => [], 'h3' => [], 'h4' => [], 'h5' => [], 'h6' => [],
+			'blockquote' => [], 'code' => [],
 		];
 
 		$clean = wp_kses( $html, $allowed );
 		$clean = html_entity_decode( (string) $clean, ENT_QUOTES );
-
-		// Normalize whitespace while keeping some structure cues.
 		$clean = preg_replace( "/[ \t]+/", ' ', $clean );
 		$clean = preg_replace( "/\n{3,}/", "\n\n", $clean );
-		$clean = trim( $clean );
-
-		return (string) $clean;
+		return trim( $clean );
 	}
 
-	/**
-	 * Backwards compatibility wrapper.
-	 */
 	private function clean_content( string $html ): string {
 		return $this->clean_content_text( $html );
 	}
 
-
-
-	/**
-	 * Conservative post-processing:
-	 * - Fix common AI misclassification (Trip vs Review-Flight/Airline) when the post is clearly itinerary/journey content.
-	 * - Provide ItemList fallback extraction when AI misses details.itemlist.
-	 */
 	private function apply_post_ai_fixes( array $result, \WP_Post $post, string $clean_text, string $clean_html, array $list_hints ): array {
 		if ( empty( $result['type'] ) || ! isset( $result['details'] ) || ! is_array( $result['details'] ) ) {
 			return $result;
@@ -381,7 +548,7 @@ EOT;
 		$type    = (string) $result['type'];
 		$details = (array) $result['details'];
 
-		// ItemList fallback extraction: if type=ItemList and empty/missing itemlist, use list_hints.
+		// ItemList fallback extraction
 		if ( $type === 'ItemList' ) {
 			$itemlist = $details['itemlist'] ?? null;
 			if ( ! is_array( $itemlist ) || empty( $itemlist ) ) {
@@ -396,27 +563,47 @@ EOT;
 			}
 		}
 
-		// Trip misclassification guardrail: If AI returns Review (Flight/Airline) but content screams "Trip/Itinerary", override to Trip.
+		// Trip misclassification guardrail
 		if ( $type === 'Review' ) {
 			$reviewed_type = (string) ( $details['reviewed_type'] ?? '' );
 			if ( in_array( $reviewed_type, [ 'Airline', 'Flight' ], true ) ) {
-				$is_trip         = $this->content_indicates_trip( $clean_text, html_entity_decode( (string) $post->post_title, ENT_QUOTES ) );
+				$title = html_entity_decode( (string) $post->post_title, ENT_QUOTES );
+
+				$title_lower = strtolower( $title );
+				$has_review_in_title = str_contains( $title_lower, 'review' );
+				$has_trip_in_title   = str_contains( $title_lower, 'trip report' ) || str_contains( $title_lower, 'itinerary' );
+
+				$is_trip         = $this->content_indicates_trip( $clean_text, $title );
 				$is_review_focus = $this->content_indicates_review_focus( $clean_text, $details );
 
-				if ( $is_trip && ! $is_review_focus ) {
+				if ( $has_trip_in_title ) {
+					$override = true;
+				} elseif ( $has_review_in_title ) {
+					$override = false;
+				} elseif ( $is_trip && ! $is_review_focus ) {
+					$override = true;
+				} else {
+					$override = false;
+				}
+
+				if ( isset( $override ) && $override ) {
 					$result['type'] = 'Trip';
-					// Ensure trip_name exists.
-					if ( empty( $details['trip_name'] ) || ! is_string( $details['trip_name'] ) ) {
-						$details['trip_name'] = html_entity_decode( (string) $post->post_title, ENT_QUOTES );
-					}
-					// Remove review-only constraints that can cascade into wrong downstream schema builds.
-					unset( $details['reviewed_type'], $details['rating'] );
+					$trip_name = ( ! empty( $details['trip_name'] ) && is_string( $details['trip_name'] ) ) ? $details['trip_name'] : $title;
+					$itinerary = ( isset( $details['itinerary'] ) && is_array( $details['itinerary'] ) ) ? $details['itinerary'] : [];
+					$image     = ( isset( $details['image'] ) && ( is_string( $details['image'] ) || is_null( $details['image'] ) ) ) ? $details['image'] : null;
+					$offers    = ( isset( $details['offers'] ) && ( is_array( $details['offers'] ) || is_null( $details['offers'] ) ) ) ? $details['offers'] : null;
+
+					$details = [
+						'trip_name' => $trip_name,
+						'itinerary' => $itinerary,
+						'image'     => $image,
+						'offers'    => $offers,
+					];
 					$result['justification'] = 'Content appears to describe a trip itinerary/journey (Trip) rather than a review of a single flight/airline.';
 				}
 			}
 		}
 
-		// Normalize summary/justification unicode entities (AI sometimes mirrors input).
 		if ( isset( $result['summary'] ) && is_string( $result['summary'] ) ) {
 			$result['summary'] = html_entity_decode( $result['summary'], ENT_QUOTES );
 		}
@@ -431,7 +618,6 @@ EOT;
 	private function content_indicates_trip( string $text, string $title = '' ): bool {
 		$hay = strtolower( $title . "\n" . $text );
 
-		// Strong signals.
 		if ( preg_match( '/\bday\s*\d+\b/i', $hay ) ) {
 			return true;
 		}
@@ -439,31 +625,12 @@ EOT;
 			return true;
 		}
 
-		// Moderate signals (require 2+).
 		$signals = 0;
 		$tokens  = [
-			'trip report',
-			'our trip',
-			'road trip',
-			'things to do',
-			'where to stay',
-			'where to eat',
-			'visited',
-			'stopped at',
-			'we went',
-			'guide to',
-			'weekend in',
-			'2 days',
-			'3 days',
-			'4 days',
-			'5 days',
-			'7 days',
-			'multi-city',
-			'multi city',
-			'day trip',
-			'journey',
-			'route',
-			'stopover',
+			'trip report', 'our trip', 'road trip', 'things to do', 'where to stay',
+			'where to eat', 'visited', 'stopped at', 'we went', 'guide to',
+			'weekend in', '2 days', '3 days', '4 days', '5 days', '7 days',
+			'multi-city', 'multi city', 'day trip', 'journey', 'route', 'stopover',
 		];
 
 		foreach ( $tokens as $tok ) {
@@ -477,7 +644,6 @@ EOT;
 
 	private function content_indicates_review_focus( string $text, array $details ): bool {
 		$hay = strtolower( $text );
-		// If the author explicitly frames as a review + has a rating, treat as real review.
 		$has_review_words = (bool) preg_match( '/\b(review|rating|score|i give it|stars?|verdict)\b/i', $hay );
 		$rating           = $details['rating'] ?? null;
 		$has_rating       = is_numeric( $rating ) && (float) $rating >= 1.0 && (float) $rating <= 5.0;
@@ -485,18 +651,12 @@ EOT;
 		return $has_review_words && $has_rating;
 	}
 
-	/**
-	 * Extract list item hints from HTML to improve ItemList extraction reliability.
-	 *
-	 * @return array<int, array{name:string, url:string}>
-	 */
 	private function extract_list_hints_from_html( string $html, int $limit = 25 ): array {
 		$html = (string) $html;
 		if ( trim( $html ) === '' ) {
 			return [];
 		}
 
-		// Find the first reasonably-sized UL/OL with >= 3 items.
 		if ( ! preg_match_all( '/<(ul|ol)\b[^>]*>(.*?)<\/\1>/is', $html, $lists, PREG_SET_ORDER ) ) {
 			return [];
 		}
@@ -537,7 +697,6 @@ EOT;
 				if ( $url !== '' ) {
 					$url = html_entity_decode( $url, ENT_QUOTES );
 					$url = esc_url_raw( $url );
-					// If it's a relative URL, normalize to absolute.
 					if ( $url !== '' && str_starts_with( $url, '/' ) ) {
 						$url = (string) home_url( $url );
 					}
@@ -547,10 +706,7 @@ EOT;
 					continue;
 				}
 
-				$out[] = [
-					'name' => $name,
-					'url'  => $url,
-				];
+				$out[] = [ 'name' => $name, 'url'  => $url ];
 
 				if ( count( $out ) >= $limit ) {
 					break;
