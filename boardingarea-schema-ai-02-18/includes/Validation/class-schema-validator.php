@@ -108,12 +108,16 @@ final class Schema_Validator {
 		$rules = self::get_type_rules();
 		foreach ( $nodes as $entry ) {
 			$node = $entry['node'];
+			$path = (string) $entry['path'];
+
+			// New: Format Validation
+			self::validate_node_formats( $node, $path, $report );
+
 			if ( ! is_array( $node ) ) {
 				continue;
 			}
 			$type_val = $node['@type'] ?? null;
 			$types    = is_array( $type_val ) ? $type_val : ( null !== $type_val ? [ $type_val ] : [] );
-			$path     = (string) $entry['path'];
 			foreach ( $types as $type ) {
 				$type = (string) $type;
 				if ( '' === $type ) {
@@ -213,6 +217,76 @@ final class Schema_Validator {
 				'severity' => 'warning',
 			],
 		];
+	}
+
+	private static function validate_node_formats( array $node, string $path, array &$report ): void {
+		foreach ( $node as $key => $val ) {
+			if ( is_array( $val ) ) {
+				// Recurse for nested objects (e.g. address) that might not be top-level nodes
+				if ( array_keys( $val ) !== range( 0, count( $val ) - 1 ) ) {
+					self::validate_node_formats( $val, $path . '.' . $key, $report );
+				}
+				continue;
+			}
+			if ( ! is_scalar( $val ) ) {
+				continue;
+			}
+			$val_str = (string) $val;
+
+			// Date checks
+			if ( in_array( $key, [ 'datePublished', 'dateModified', 'uploadDate', 'validFrom', 'validThrough' ], true ) ) {
+				if ( ! self::is_valid_date( $val_str ) ) {
+					self::add_issue( $report, 'warning', "Property '$key' has invalid date format: $val_str", ['path' => "$path.$key"] );
+				}
+			}
+
+			// URL checks
+			if ( in_array( $key, [ 'url', 'contentUrl', 'embedUrl', 'thumbnailUrl', 'image' ], true ) ) {
+				 if ( ! self::is_valid_url( $val_str ) ) {
+					self::add_issue( $report, 'warning', "Property '$key' has invalid URL: $val_str", ['path' => "$path.$key"] );
+				 }
+			}
+
+			// Duration
+			if ( $key === 'duration' ) {
+				if ( ! self::is_valid_duration( $val_str ) ) {
+					 self::add_issue( $report, 'warning', "Property 'duration' has invalid format (expected ISO 8601 Duration): $val_str", ['path' => "$path.$key"] );
+				}
+			}
+
+			// Rating
+			if ( $key === 'ratingValue' ) {
+				if ( ! is_numeric( $val ) || $val < 0 || $val > 5 ) {
+					 self::add_issue( $report, 'warning', "Property 'ratingValue' should be between 0 and 5: $val_str", ['path' => "$path.$key"] );
+				}
+			}
+		}
+	}
+
+	private static function is_valid_date( string $date ): bool {
+		// ISO 8601 (ATOM) check
+		if ( \DateTime::createFromFormat( \DateTime::ATOM, $date ) ) {
+			return true;
+		}
+		// Also allow Y-m-d
+		if ( \DateTime::createFromFormat( 'Y-m-d', $date ) ) {
+			return true;
+		}
+		// Also allow simple YYYY
+		if ( preg_match( '/^\d{4}$/', $date ) ) {
+			return true;
+		}
+		return false;
+	}
+
+	private static function is_valid_url( string $url ): bool {
+		// Just simple filter validation
+		return (bool) filter_var( $url, FILTER_VALIDATE_URL );
+	}
+
+	private static function is_valid_duration( string $duration ): bool {
+		// Regex for ISO 8601 duration (e.g. PT1H30M)
+		return (bool) preg_match( '/^P/', $duration );
 	}
 
 	private static function validate_node_with_rules(

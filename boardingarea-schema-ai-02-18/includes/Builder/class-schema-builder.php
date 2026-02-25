@@ -391,6 +391,14 @@ final class Schema_Builder {
 				return array_merge( [ '@id' => $id ], $this->reviewed_lounge( $details, $image_url, $fallback ) );
 			case 'Airline':
 				return array_merge( [ '@id' => $id ], $this->reviewed_airline( $details, $fallback ) );
+			case 'Flight':
+				return array_merge( [ '@id' => $id ], $this->reviewed_flight( $details ) );
+			case 'SoftwareApplication':
+				return array_merge( [ '@id' => $id ], $this->reviewed_software( $details, $image_url, $fallback ) );
+			case 'CreditCard':
+				return array_merge( [ '@id' => $id ], $this->reviewed_credit_card( $details, $fallback ) );
+			case 'FinancialProduct':
+				return array_merge( [ '@id' => $id ], $this->reviewed_financial_product( $details, $fallback ) );
 			case 'Place':
 				return array_merge( [ '@id' => $id ], $this->reviewed_place( $details, $image_url, $fallback ) );
 			case 'Product':
@@ -613,79 +621,6 @@ final class Schema_Builder {
 			'brand'       => (string) ( $p['brand'] ?? '' ),
 		];
 		return $this->apply_common_thing_props( $product, $p );
-	}
-
-	private function build_review( array $base, array $details, string $summary, string $image_url ): array {
-		$reviewed_type = (string) ( $details['reviewed_type'] ?? '' );
-		$allowed       = array_keys( self::get_reviewed_types() );
-		if ( ! in_array( $reviewed_type, $allowed, true ) ) {
-			$reviewed_type = '';
-		}
-		if ( '' === $reviewed_type ) {
-			if ( ! empty( $details['lounge'] ) ) {
-				$reviewed_type = 'LocalBusiness';
-			} elseif ( ! empty( $details['hotel'] ) ) {
-				$reviewed_type = 'Hotel';
-			} elseif ( ! empty( $details['restaurant'] ) ) {
-				$reviewed_type = 'Restaurant';
-			} elseif ( ! empty( $details['software'] ) ) {
-				$reviewed_type = 'SoftwareApplication';
-			} elseif ( ! empty( $details['flight'] ) ) {
-				$reviewed_type = 'Flight';
-			} elseif ( ! empty( $details['card'] ) ) {
-				$reviewed_type = 'CreditCard';
-			} else {
-				$reviewed_type = 'Product';
-			}
-		}
-		$headline_fallback = (string) ( $base['headline'] ?? '' );
-		switch ( $reviewed_type ) {
-			case 'Flight':
-				$itemReviewed = $this->reviewed_flight( $details );
-				break;
-			case 'Airline':
-				$itemReviewed = $this->reviewed_airline( $details, $headline_fallback );
-				break;
-			case 'Hotel':
-				$itemReviewed = $this->reviewed_hotel( $details, $image_url, $headline_fallback );
-				break;
-			case 'Restaurant':
-				$itemReviewed = $this->reviewed_restaurant( $details, $image_url, $headline_fallback );
-				break;
-			case 'SoftwareApplication':
-				$itemReviewed = $this->reviewed_software( $details, $image_url, $headline_fallback );
-				break;
-			case 'CreditCard':
-				$itemReviewed = $this->reviewed_credit_card( $details, $headline_fallback );
-				break;
-			case 'FinancialProduct':
-				$itemReviewed = $this->reviewed_financial_product( $details, $headline_fallback );
-				break;
-			case 'LocalBusiness':
-				$itemReviewed = $this->reviewed_lounge( $details, $image_url, $headline_fallback );
-				break;
-			case 'Place':
-				$itemReviewed = $this->reviewed_place( $details, $image_url, $headline_fallback );
-				break;
-			default:
-				$itemReviewed = $this->reviewed_product( $details, $image_url, $headline_fallback );
-				break;
-		}
-		$rating_val = $details['rating']
-			?? ( $details['lounge']['rating'] ?? null )
-			?? ( $details['hotel']['rating'] ?? null )
-			?? ( $details['restaurant']['rating'] ?? null )
-			?? ( $details['software']['rating'] ?? null )
-			?? ( $details['card']['rating'] ?? null );
-		return array_merge(
-			$base,
-			[
-				'@type'        => 'Review',
-				'reviewBody'   => ( '' !== $summary ) ? $summary : null,
-				'reviewRating' => $this->rating_node( $rating_val ),
-				'itemReviewed' => $itemReviewed,
-			]
-		);
 	}
 
 	private function reviewed_product( array $details, string $image_url, string $fallback ): array {
