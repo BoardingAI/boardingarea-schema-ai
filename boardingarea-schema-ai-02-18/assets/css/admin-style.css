@@ -136,6 +136,46 @@
 @keyframes basai-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 .spin-anim { animation: basai-spin 2s infinite linear; }
 
+/* --- Action Bar (New) --- */
+.basai-action-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f0f6fc;
+    border: 1px solid #c5d9ed;
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin-bottom: 5px;
+}
+
+.action-bar-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--basai-text-sub);
+}
+.action-bar-status .dashicons { color: var(--basai-primary); }
+
+.action-bar-tools {
+    display: flex;
+    gap: 8px;
+}
+.action-bar-tools .button {
+    height: 28px !important;
+    line-height: 26px !important;
+    padding: 0 10px !important;
+    font-size: 12px !important;
+    display: inline-flex !important;
+    align-items: center;
+    gap: 4px;
+}
+.action-bar-tools .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+}
+
 /* --- Feedback Area --- */
 .basai-feedback-area {
     display: flex;

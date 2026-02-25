@@ -159,6 +159,23 @@ final class Meta_Box {
                 </div>
             </div>
 
+            <div class="basai-action-bar">
+                <div class="action-bar-status">
+                    <span class="dashicons dashicons-category"></span>
+                    <span class="template-indicator" title="Current Template">
+                        Using: <strong id="basai-current-type"><?php echo esc_html( $active_label ); ?></strong>
+                    </span>
+                </div>
+                <div class="action-bar-tools">
+                    <button type="button" id="basai-validate-btn" class="button button-secondary">
+                        <span class="dashicons dashicons-yes"></span> Validate JSON
+                    </button>
+                    <button type="button" id="basai-test-validator-btn" class="button button-secondary">
+                        <span class="dashicons dashicons-external"></span> Google Test
+                    </button>
+                </div>
+            </div>
+
             <div class="basai-feedback-area">
                 <?php if ( '' !== $err ) : ?>
                     <div class="basai-notice basai-notice-error">
@@ -261,17 +278,6 @@ final class Meta_Box {
                             <?php endif; ?>
                         </div>
                         <div class="editor-actions">
-                            <span class="template-indicator" title="Current Template">
-                                Using: <strong id="basai-current-type"><?php echo esc_html( $active_label ); ?></strong>
-                            </span>
-                            <div class="button-group">
-                                <button type="button" id="basai-validate-btn" class="button button-small button-secondary basai-btn-large">
-                                    <span class="dashicons dashicons-yes"></span> Validate JSON
-                                </button>
-                                <button type="button" id="basai-test-validator-btn" class="button button-small button-secondary basai-btn-large">
-                                    <span class="dashicons dashicons-external"></span> Google Test
-                                </button>
-                            </div>
                             <button type="button" class="basai-collapse-toggle" aria-expanded="true" aria-controls="basai-json-body">
                                 <span class="dashicons dashicons-arrow-up-alt2"></span>
                                 <span class="screen-reader-text">Collapse Schema JSON-LD</span>
