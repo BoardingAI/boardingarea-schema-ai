@@ -116,23 +116,31 @@ final class OpenAI_Handler {
 		$make_schema = function( string $type_name, array $details_props ) use ( $common_props ) {
 			$details_required = array_keys( $details_props );
 			
-			return [
+			$schema = [
 				'type' => 'object',
 				'properties' => [
 					'type'          => [ 'type' => 'string', 'const' => $type_name ],
 					'justification' => [ 'type' => 'string' ],
 					'summary'       => [ 'type' => 'string' ],
 					'missing_info'  => [ 'type' => 'array', 'items' => [ 'type' => 'string' ] ],
-					'details'       => [
-						'type' => 'object',
-						'properties' => $details_props,
-						'required' => $details_required,
-						'additionalProperties' => false
-					]
 				],
-				'required' => [ 'type', 'justification', 'summary', 'missing_info', 'details' ],
+				'required' => [ 'type', 'justification', 'summary', 'missing_info' ],
 				'additionalProperties' => false
 			];
+
+			// Only add details if there are actual properties to extract.
+			// Empty object schemas cause OpenAI's parser to drop fields.
+			if ( ! empty( $details_props ) ) {
+				$schema['properties']['details'] = [
+					'type' => 'object',
+					'properties' => $details_props,
+					'required' => $details_required,
+					'additionalProperties' => false
+				];
+				$schema['required'][] = 'details';
+			}
+
+			return $schema;
 		};
 
 		// --- Reusable Property Definitions (Strict: nullable for optional) ---
@@ -443,10 +451,17 @@ final class OpenAI_Handler {
 			$result['details'] = [];
 		}
 
-		foreach ( [ 'type', 'justification', 'summary', 'details', 'missing_info' ] as $k ) {
-			if ( ! array_key_exists( $k, $result ) ) {
-				return new WP_Error( 'basai_openai_missing_keys', "AI output missing required key: '{$k}'. Received keys: " . implode(', ', array_keys($result)) . ". Raw AI response: " . print_r($data['choices'][0]['message']['content'], true) );
-			}
+		// Ensure justification and summary are strings
+		if ( ! isset( $result['justification'] ) || ! is_string( $result['justification'] ) ) {
+			$result['justification'] = '';
+		}
+
+		if ( ! isset( $result['summary'] ) || ! is_string( $result['summary'] ) ) {
+			$result['summary'] = '';
+		}
+
+		if ( ! isset( $result['type'] ) ) {
+			return new WP_Error( 'basai_openai_missing_keys', "AI output missing required key: 'type'. Received keys: " . implode(', ', array_keys($result)) . ". Raw AI response: " . print_r($data['choices'][0]['message']['content'], true) );
 		}
 
 		return $result;
