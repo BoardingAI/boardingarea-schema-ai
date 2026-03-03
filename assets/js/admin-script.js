@@ -802,6 +802,14 @@ jQuery(document).ready(function ($) {
             return;
         }
 
+        // Generate temporary IDs for top-level nodes that lack one so the visualizer can map them.
+        let autoId = 1;
+        nodes.forEach(n => {
+            if (typeof n === 'object' && n !== null && (!n['@id'] || typeof n['@id'] !== 'string' || n['@id'].trim() === '')) {
+                n['@id'] = `_basai_auto_id_${autoId++}`;
+            }
+        });
+
         const idMap = {};
         const idSet = new Set();
         const idCounts = {};
@@ -868,10 +876,23 @@ jQuery(document).ready(function ($) {
             const types = Array.isArray(t) ? t : (t ? [t] : []);
             return types.includes('WebPage');
         });
+
+        // Let's also treat these as acceptable primary roots if there's no WebPage.
+        const alternateRootTypes = ['DiscussionForumPosting', 'QAPage', 'ProfilePage', 'AboutPage'];
+        const alternateRootIds = Object.keys(idMap).filter(id => {
+            const t = idMap[id]['@type'];
+            const types = Array.isArray(t) ? t : (t ? [t] : []);
+            return types.some(tp => alternateRootTypes.includes(tp));
+        });
+
         let rootIds = Object.keys(idMap).filter(id => (inbound[id] || 0) === 0);
+
         if (webPageIds.length > 0) {
             rootIds = Array.from(new Set([ ...webPageIds, ...rootIds ]));
+        } else if (alternateRootIds.length > 0) {
+            rootIds = Array.from(new Set([ ...alternateRootIds, ...rootIds ]));
         }
+
         if (rootIds.length === 0) {
             rootIds = Object.keys(idMap);
         }
