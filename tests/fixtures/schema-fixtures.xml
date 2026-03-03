@@ -1,0 +1,292 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+    xmlns:excerpt="http://wordpress.org/export/1.2/excerpt/"
+    xmlns:content="http://purl.org/rss/1.0/modules/content/"
+    xmlns:wfw="http://wellformedweb.org/CommentAPI/"
+    xmlns:dc="http://purl.org/dc/elements/1.1/"
+    xmlns:wp="http://wordpress.org/export/1.2/">
+  <channel>
+    <title>SchemaMind AI Fixtures</title>
+    <link>https://example.com</link>
+    <description>Fixture posts for schema validation.</description>
+    <pubDate>Mon, 16 Feb 2026 12:00:00 +0000</pubDate>
+    <language>en</language>
+    <wp:wxr_version>1.2</wp:wxr_version>
+    <wp:base_site_url>https://example.com</wp:base_site_url>
+    <wp:base_blog_url>https://example.com</wp:base_blog_url>
+
+    <item>
+      <title>Fixture: Blog Posting</title>
+      <dc:creator>admin</dc:creator>
+      <pubDate>Mon, 16 Feb 2026 12:01:00 +0000</pubDate>
+      <content:encoded><![CDATA[
+<p>This is a sample blog post about a new airport lounge experience. It includes a first impression, food notes, and a short verdict.</p>
+<p>Rating: 4.5/5</p>
+<p>Location: Concourse A, near Gate A34.</p>
+]]></content:encoded>
+      <excerpt:encoded><![CDATA[Sample blog post about an airport lounge.]]></excerpt:encoded>
+      <wp:post_id>1001</wp:post_id>
+      <wp:post_date>2026-02-16 12:01:00</wp:post_date>
+      <wp:post_date_gmt>2026-02-16 12:01:00</wp:post_date_gmt>
+      <wp:post_name>fixture-blog-posting</wp:post_name>
+      <wp:status>publish</wp:status>
+      <wp:post_type>post</wp:post_type>
+      <wp:postmeta>
+        <wp:meta_key><![CDATA[_basai_schema_template_id]]></wp:meta_key>
+        <wp:meta_value><![CDATA[BlogPosting]]></wp:meta_value>
+      </wp:postmeta>
+    </item>
+
+    <item>
+      <title>Fixture: Article</title>
+      <dc:creator>admin</dc:creator>
+      <pubDate>Mon, 16 Feb 2026 12:02:00 +0000</pubDate>
+      <content:encoded><![CDATA[
+<p>This article explains how airlines manage delays and what travelers can do to stay informed.</p>
+<p>It focuses on policy, communication, and passenger rights.</p>
+]]></content:encoded>
+      <excerpt:encoded><![CDATA[Sample article about airline delays.]]></excerpt:encoded>
+      <wp:post_id>1002</wp:post_id>
+      <wp:post_date>2026-02-16 12:02:00</wp:post_date>
+      <wp:post_date_gmt>2026-02-16 12:02:00</wp:post_date_gmt>
+      <wp:post_name>fixture-article</wp:post_name>
+      <wp:status>publish</wp:status>
+      <wp:post_type>post</wp:post_type>
+      <wp:postmeta>
+        <wp:meta_key><![CDATA[_basai_schema_template_id]]></wp:meta_key>
+        <wp:meta_value><![CDATA[Article]]></wp:meta_value>
+      </wp:postmeta>
+    </item>
+
+    <item>
+      <title>Fixture: News Article</title>
+      <dc:creator>admin</dc:creator>
+      <pubDate>Mon, 16 Feb 2026 12:03:00 +0000</pubDate>
+      <content:encoded><![CDATA[
+<p>Breaking news: Example Air announces a new direct route between DEN and LHR starting June 1.</p>
+<p>The airline will operate daily service with a new premium economy cabin.</p>
+]]></content:encoded>
+      <excerpt:encoded><![CDATA[Sample news article about a new route.]]></excerpt:encoded>
+      <wp:post_id>1003</wp:post_id>
+      <wp:post_date>2026-02-16 12:03:00</wp:post_date>
+      <wp:post_date_gmt>2026-02-16 12:03:00</wp:post_date_gmt>
+      <wp:post_name>fixture-news-article</wp:post_name>
+      <wp:status>publish</wp:status>
+      <wp:post_type>post</wp:post_type>
+      <wp:postmeta>
+        <wp:meta_key><![CDATA[_basai_schema_template_id]]></wp:meta_key>
+        <wp:meta_value><![CDATA[NewsArticle]]></wp:meta_value>
+      </wp:postmeta>
+    </item>
+
+    <item>
+      <title>Fixture: Review - Lounge</title>
+      <dc:creator>admin</dc:creator>
+      <pubDate>Mon, 16 Feb 2026 12:04:00 +0000</pubDate>
+      <content:encoded><![CDATA[
+<p>This review covers the Capital One Lounge at Denver International Airport.</p>
+<p>Rating: 4.5/5</p>
+<p>Airport: Denver International Airport (DEN). Address: Concourse A.</p>
+<p>Highlights: food quality, seating, and bar service.</p>
+]]></content:encoded>
+      <excerpt:encoded><![CDATA[Sample lounge review.]]></excerpt:encoded>
+      <wp:post_id>1004</wp:post_id>
+      <wp:post_date>2026-02-16 12:04:00</wp:post_date>
+      <wp:post_date_gmt>2026-02-16 12:04:00</wp:post_date_gmt>
+      <wp:post_name>fixture-review-lounge</wp:post_name>
+      <wp:status>publish</wp:status>
+      <wp:post_type>post</wp:post_type>
+      <wp:postmeta>
+        <wp:meta_key><![CDATA[_basai_schema_template_id]]></wp:meta_key>
+        <wp:meta_value><![CDATA[Review]]></wp:meta_value>
+      </wp:postmeta>
+      <wp:postmeta>
+        <wp:meta_key><![CDATA[_basai_schema_reviewed_type]]></wp:meta_key>
+        <wp:meta_value><![CDATA[LocalBusiness]]></wp:meta_value>
+      </wp:postmeta>
+    </item>
+
+    <item>
+      <title>Fixture: FAQ Page</title>
+      <dc:creator>admin</dc:creator>
+      <pubDate>Mon, 16 Feb 2026 12:05:00 +0000</pubDate>
+      <content:encoded><![CDATA[
+<p>Q: What time does security open? A: Security opens at 4:00 AM.</p>
+<p>Q: Is there free Wi-Fi? A: Yes, free Wi-Fi is available throughout the terminal.</p>
+<p>Q: Can I bring food through security? A: Yes, solid food is allowed.</p>
+]]></content:encoded>
+      <excerpt:encoded><![CDATA[Sample FAQ content for airports.]]></excerpt:encoded>
+      <wp:post_id>1005</wp:post_id>
+      <wp:post_date>2026-02-16 12:05:00</wp:post_date>
+      <wp:post_date_gmt>2026-02-16 12:05:00</wp:post_date_gmt>
+      <wp:post_name>fixture-faq</wp:post_name>
+      <wp:status>publish</wp:status>
+      <wp:post_type>post</wp:post_type>
+      <wp:postmeta>
+        <wp:meta_key><![CDATA[_basai_schema_template_id]]></wp:meta_key>
+        <wp:meta_value><![CDATA[FAQPage]]></wp:meta_value>
+      </wp:postmeta>
+    </item>
+
+    <item>
+      <title>Fixture: How To</title>
+      <dc:creator>admin</dc:creator>
+      <pubDate>Mon, 16 Feb 2026 12:06:00 +0000</pubDate>
+      <content:encoded><![CDATA[
+<p>How to redeem airline miles for a domestic flight.</p>
+<p>Step 1: Check award availability on the airline site.</p>
+<p>Step 2: Compare partner programs for lower mileage costs.</p>
+<p>Step 3: Book the award ticket and confirm the itinerary.</p>
+]]></content:encoded>
+      <excerpt:encoded><![CDATA[Sample how-to for airline miles.]]></excerpt:encoded>
+      <wp:post_id>1006</wp:post_id>
+      <wp:post_date>2026-02-16 12:06:00</wp:post_date>
+      <wp:post_date_gmt>2026-02-16 12:06:00</wp:post_date_gmt>
+      <wp:post_name>fixture-howto</wp:post_name>
+      <wp:status>publish</wp:status>
+      <wp:post_type>post</wp:post_type>
+      <wp:postmeta>
+        <wp:meta_key><![CDATA[_basai_schema_template_id]]></wp:meta_key>
+        <wp:meta_value><![CDATA[HowTo]]></wp:meta_value>
+      </wp:postmeta>
+    </item>
+
+    <item>
+      <title>Fixture: Item List</title>
+      <dc:creator>admin</dc:creator>
+      <pubDate>Mon, 16 Feb 2026 12:07:00 +0000</pubDate>
+      <content:encoded><![CDATA[
+<p>Top airport lounges in the US.</p>
+<ol>
+  <li>Capital One Lounge - Denver (https://example.com/lounges/den)</li>
+  <li>Centurion Lounge - Dallas (https://example.com/lounges/dfw)</li>
+  <li>United Polaris - Newark (https://example.com/lounges/ewr)</li>
+</ol>
+]]></content:encoded>
+      <excerpt:encoded><![CDATA[Sample item list of lounges.]]></excerpt:encoded>
+      <wp:post_id>1007</wp:post_id>
+      <wp:post_date>2026-02-16 12:07:00</wp:post_date>
+      <wp:post_date_gmt>2026-02-16 12:07:00</wp:post_date_gmt>
+      <wp:post_name>fixture-itemlist</wp:post_name>
+      <wp:status>publish</wp:status>
+      <wp:post_type>post</wp:post_type>
+      <wp:postmeta>
+        <wp:meta_key><![CDATA[_basai_schema_template_id]]></wp:meta_key>
+        <wp:meta_value><![CDATA[ItemList]]></wp:meta_value>
+      </wp:postmeta>
+    </item>
+
+    <item>
+      <title>Fixture: Video Object</title>
+      <dc:creator>admin</dc:creator>
+      <pubDate>Mon, 16 Feb 2026 12:08:00 +0000</pubDate>
+      <content:encoded><![CDATA[
+<p>Video: Tour of the Capital One Lounge.</p>
+<p>Embed URL: https://www.youtube.com/watch?v=dQw4w9WgXcQ</p>
+<p>Thumbnail: https://example.com/images/lounge-thumb.jpg</p>
+<p>Upload Date: 2026-02-01</p>
+<p>Duration: PT2M30S</p>
+]]></content:encoded>
+      <excerpt:encoded><![CDATA[Sample video object content.]]></excerpt:encoded>
+      <wp:post_id>1008</wp:post_id>
+      <wp:post_date>2026-02-16 12:08:00</wp:post_date>
+      <wp:post_date_gmt>2026-02-16 12:08:00</wp:post_date_gmt>
+      <wp:post_name>fixture-videoobject</wp:post_name>
+      <wp:status>publish</wp:status>
+      <wp:post_type>post</wp:post_type>
+      <wp:postmeta>
+        <wp:meta_key><![CDATA[_basai_schema_template_id]]></wp:meta_key>
+        <wp:meta_value><![CDATA[VideoObject]]></wp:meta_value>
+      </wp:postmeta>
+    </item>
+
+    <item>
+      <title>Fixture: Product</title>
+      <dc:creator>admin</dc:creator>
+      <pubDate>Mon, 16 Feb 2026 12:09:00 +0000</pubDate>
+      <content:encoded><![CDATA[
+<p>Product: Travel Backpack 45L by ExampleCo.</p>
+<p>Brand: ExampleCo. Price Range: $$$. Color: Black.</p>
+<p>This is a durable carry-on sized travel backpack for frequent flyers.</p>
+]]></content:encoded>
+      <excerpt:encoded><![CDATA[Sample product content.]]></excerpt:encoded>
+      <wp:post_id>1009</wp:post_id>
+      <wp:post_date>2026-02-16 12:09:00</wp:post_date>
+      <wp:post_date_gmt>2026-02-16 12:09:00</wp:post_date_gmt>
+      <wp:post_name>fixture-product</wp:post_name>
+      <wp:status>publish</wp:status>
+      <wp:post_type>post</wp:post_type>
+      <wp:postmeta>
+        <wp:meta_key><![CDATA[_basai_schema_template_id]]></wp:meta_key>
+        <wp:meta_value><![CDATA[Product]]></wp:meta_value>
+      </wp:postmeta>
+    </item>
+
+    <item>
+      <title>Fixture: Trip</title>
+      <dc:creator>admin</dc:creator>
+      <pubDate>Mon, 16 Feb 2026 12:10:00 +0000</pubDate>
+      <content:encoded><![CDATA[
+<p>Weekend trip to Denver with a simple itinerary.</p>
+<p>Day 1: Arrive in Denver, check into hotel, visit Union Station.</p>
+<p>Day 2: Morning hike, afternoon brewery tour.</p>
+<p>Day 3: Airport and return flight.</p>
+]]></content:encoded>
+      <excerpt:encoded><![CDATA[Sample trip itinerary content.]]></excerpt:encoded>
+      <wp:post_id>1010</wp:post_id>
+      <wp:post_date>2026-02-16 12:10:00</wp:post_date>
+      <wp:post_date_gmt>2026-02-16 12:10:00</wp:post_date_gmt>
+      <wp:post_name>fixture-trip</wp:post_name>
+      <wp:status>publish</wp:status>
+      <wp:post_type>post</wp:post_type>
+      <wp:postmeta>
+        <wp:meta_key><![CDATA[_basai_schema_template_id]]></wp:meta_key>
+        <wp:meta_value><![CDATA[Trip]]></wp:meta_value>
+      </wp:postmeta>
+    </item>
+
+    <item>
+      <title>Fixture: Place</title>
+      <dc:creator>admin</dc:creator>
+      <pubDate>Mon, 16 Feb 2026 12:11:00 +0000</pubDate>
+      <content:encoded><![CDATA[
+<p>Guide to Denver International Airport.</p>
+<p>Address: 8500 Pena Blvd, Denver, CO 80249.</p>
+<p>Known for its large terminal and mountain views.</p>
+]]></content:encoded>
+      <excerpt:encoded><![CDATA[Sample place guide content.]]></excerpt:encoded>
+      <wp:post_id>1011</wp:post_id>
+      <wp:post_date>2026-02-16 12:11:00</wp:post_date>
+      <wp:post_date_gmt>2026-02-16 12:11:00</wp:post_date_gmt>
+      <wp:post_name>fixture-place</wp:post_name>
+      <wp:status>publish</wp:status>
+      <wp:post_type>post</wp:post_type>
+      <wp:postmeta>
+        <wp:meta_key><![CDATA[_basai_schema_template_id]]></wp:meta_key>
+        <wp:meta_value><![CDATA[Place]]></wp:meta_value>
+      </wp:postmeta>
+    </item>
+
+    <item>
+      <title>Fixture: Airline</title>
+      <dc:creator>admin</dc:creator>
+      <pubDate>Mon, 16 Feb 2026 12:12:00 +0000</pubDate>
+      <content:encoded><![CDATA[
+<p>Profile of Example Air.</p>
+<p>IATA code: EX. Hub: Denver. Focus: regional routes.</p>
+]]></content:encoded>
+      <excerpt:encoded><![CDATA[Sample airline profile content.]]></excerpt:encoded>
+      <wp:post_id>1012</wp:post_id>
+      <wp:post_date>2026-02-16 12:12:00</wp:post_date>
+      <wp:post_date_gmt>2026-02-16 12:12:00</wp:post_date_gmt>
+      <wp:post_name>fixture-airline</wp:post_name>
+      <wp:status>publish</wp:status>
+      <wp:post_type>post</wp:post_type>
+      <wp:postmeta>
+        <wp:meta_key><![CDATA[_basai_schema_template_id]]></wp:meta_key>
+        <wp:meta_value><![CDATA[Airline]]></wp:meta_value>
+      </wp:postmeta>
+    </item>
+
+  </channel>
+</rss>
