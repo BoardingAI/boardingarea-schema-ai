@@ -21,6 +21,10 @@ final class Schema_Output {
 			return;
 		}
 
+		if ( get_option( Settings::OPTION_MODE, 'active' ) === 'passive' ) {
+			return;
+		}
+
 		if ( ! is_singular() ) {
 			return;
 		}

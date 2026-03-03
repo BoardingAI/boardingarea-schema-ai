@@ -19,6 +19,8 @@ jQuery(document).ready(function ($) {
     const $reviewedInput = $('#basai-reviewed-type-input');
     const $currentLabel = $('#basai-current-type');
     const $loader = $('#basai-loading');
+    const $loaderText = $loader.find('.basai-loading-text');
+    const basaiMode = $('#basai-mode').val();
 
     const $graphSummary = $('#basai-graph-summary');
     const $graphErrors = $('#basai-graph-errors');
@@ -1252,6 +1254,59 @@ jQuery(document).ready(function ($) {
         if ($card.length) toggleCollapsible($card);
     });
 
+    function runFetchFrontend() {
+        const fetchBtn = $('#basai-fetch-frontend-btn');
+        if (fetchBtn.length) fetchBtn.prop('disabled', true);
+
+        $loaderText.text('Fetching Frontend Schema...');
+        $loader.addClass('visible');
+        updateStatus('Fetching Schema...', 'working');
+
+        $.ajax({
+            url: basaiData.ajaxUrl,
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'basai_fetch_frontend_schema',
+                nonce: basaiData.nonce,
+                post_id: $('#basai-post-id').val(),
+            },
+            success: function (res) {
+                if (res.success) {
+                    const formatted = prettyPrintJson(res.data.schema || '');
+                    $editor.val(formatted || res.data.schema);
+                    renderGraph($editor.val());
+                    renderServerValidation(res.data.report || {});
+
+                    const errs = res.data.report && res.data.report.errors ? res.data.report.errors.length : 0;
+                    updateStatus('✔ Fetched Successfully', errs > 0 ? 'error' : 'success');
+                    updateTimestamp('Fetched: Just now', true);
+                } else {
+                    updateStatus('Error: ' + (res.data && res.data.message ? res.data.message : 'Unknown error'), 'error');
+                }
+            },
+            error: function () {
+                updateStatus('Server Error', 'error');
+            },
+            complete: function () {
+                if (fetchBtn.length) fetchBtn.prop('disabled', false);
+                $loader.removeClass('visible');
+            }
+        });
+    }
+
+    $('#basai-fetch-frontend-btn').on('click', function(e) {
+        e.preventDefault();
+        runFetchFrontend();
+    });
+
+    if (basaiMode === 'passive') {
+        // Automatically fetch on load if editor is empty
+        if (!$editor.val().trim() || $editor.val() === '[]' || $editor.val() === '{}') {
+            runFetchFrontend();
+        }
+    }
+
     function runGenerate(save = true) {
         const selectedType = $typeSelector.val();
         const selectedReviewed = $reviewSelector.val();
@@ -1263,6 +1318,7 @@ jQuery(document).ready(function ($) {
         const $genSaveBtn = $('#basai-generate-save-btn'); // Local definition for unified logic
         if ($genSaveBtn.length) $genSaveBtn.prop('disabled', true);
         
+        $loaderText.text('Generating Schema...');
         $loader.addClass('visible');
         updateStatus(workingMsg, 'working');
 

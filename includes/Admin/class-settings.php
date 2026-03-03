@@ -17,6 +17,9 @@ final class Settings {
 	// New: WebSite node emission toggle
 	public const OPTION_WEBSITE_ALL_PAGES = 'basai_website_all_pages';
 
+	// New: Global operating mode (active/passive)
+	public const OPTION_MODE = 'basai_mode';
+
 	public static function get_effective_api_key(): string {
 		if ( \defined( 'BASAI_OPENAI_API_KEY' ) && is_string( \constant( 'BASAI_OPENAI_API_KEY' ) ) && '' !== \constant( 'BASAI_OPENAI_API_KEY' ) ) {
 			return \constant( 'BASAI_OPENAI_API_KEY' );
@@ -70,9 +73,16 @@ final class Settings {
 			'default' => 1,
 		]);
 
+		register_setting(self::OPTION_GROUP, self::OPTION_MODE, [
+			'type' => 'string',
+			'sanitize_callback' => static fn( $v ) => in_array( $v, [ 'active', 'passive' ], true ) ? $v : 'active',
+			'default' => 'active',
+		]);
+
 		add_settings_section( 'basai_main', 'General Settings', null, 'boardingarea-schema-ai' );
 
 		add_settings_field( 'basai_key', 'OpenAI API Key', [ $this, 'field_key' ], 'boardingarea-schema-ai', 'basai_main' );
+		add_settings_field( 'basai_mode', 'Operating Mode', [ $this, 'field_mode' ], 'boardingarea-schema-ai', 'basai_main' );
 		add_settings_field( 'basai_model', 'Model', [ $this, 'field_model' ], 'boardingarea-schema-ai', 'basai_main' );
 		add_settings_field( 'basai_enable', 'Enable Frontend Output', [ $this, 'field_enable' ], 'boardingarea-schema-ai', 'basai_main' );
 		add_settings_field( 'basai_auto', 'Auto-Generate on Publish/Update', [ $this, 'field_auto' ], 'boardingarea-schema-ai', 'basai_main' );
@@ -98,6 +108,17 @@ final class Settings {
 			?>
 		</form>
 		</div>
+		<?php
+	}
+
+	public function field_mode(): void {
+		$val = (string) get_option( self::OPTION_MODE, 'active' );
+		?>
+		<select name="<?php echo esc_attr( self::OPTION_MODE ); ?>">
+			<option value="active" <?php selected( $val, 'active' ); ?>>Active (Build & Output Schema)</option>
+			<option value="passive" <?php selected( $val, 'passive' ); ?>>Passive (Listen/Validate Only)</option>
+		</select>
+		<p class="description">In Active mode, the plugin builds and outputs JSON-LD schema. In Passive mode, the plugin acts as a visualizer/validator for schema built by other tools and does not output any schema to the frontend.</p>
 		<?php
 	}
 

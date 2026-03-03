@@ -356,6 +356,8 @@ final class OpenAI_Handler {
 		$generic_schema = $make_schema( 'BlogPosting', [] );
 		$article_schema = $make_schema( 'Article', [] );
 		$news_schema    = $make_schema( 'NewsArticle', [] );
+		$about_schema   = $make_schema( 'AboutPage', [] );
+		$profile_schema = $make_schema( 'ProfilePage', [] );
 
 		return [
 			'type' => 'object',
@@ -373,7 +375,9 @@ final class OpenAI_Handler {
 						$airline_schema,
 						$generic_schema,
 						$article_schema,
-						$news_schema
+						$news_schema,
+						$about_schema,
+						$profile_schema
 					]
 				]
 			],
@@ -473,6 +477,10 @@ MISSING INFO (CRITICAL):
 REVIEW VS TRIP DISTINCTION:
 - Choose type="Trip" for journeys, itineraries, guides, trip reports.
 - Choose type="Review" ONLY for specific evaluations with a verdict/rating.
+
+PAGE TYPES:
+- Choose type="AboutPage" if the content primarily describes a business, publication, or organization's history, mission, or "About Us" information.
+- Choose type="ProfilePage" if the content primarily describes a specific individual person (like an author bio page, employee profile, or user profile).
 
 DETAILS:
 - Fill the 'details' object corresponding to your chosen 'type'.
