@@ -38,11 +38,19 @@ final class Meta_Box {
     }
 
     public function add_meta_box(): void {
+        // Fetch all public post types dynamically.
+        // This naturally includes 'post', 'page', and any custom types like 'milepoint_qa' or 'milepoint-chat'
+        // without crashing if those custom types don't exist on the current site.
+        $post_types = get_post_types( [ 'public' => true ], 'names' );
+
+        // Ensure standard types are always targeted just in case
+        $target_types = array_unique( array_merge( [ 'post', 'page' ], array_values( $post_types ) ) );
+
         add_meta_box(
             'basai_schema_box',
             'BoardingArea Schema AI',
             [ $this, 'render_meta_box' ],
-            [ 'post', 'page' ],
+            $target_types,
             'normal',
             'high'
         );
