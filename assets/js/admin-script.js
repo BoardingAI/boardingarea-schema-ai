@@ -891,7 +891,7 @@ jQuery(document).ready(function ($) {
         }
 
         if (primaryIds.size === 0) {
-            const fallbackTypes = ['BlogPosting','Article','NewsArticle','Review','HowTo','FAQPage','ItemList','VideoObject','Product','Trip','Place','Airline','JobPosting','CollectionPage'];
+            const fallbackTypes = ['BlogPosting','Article','NewsArticle','Review','HowTo','FAQPage','ItemList','VideoObject','Product','Trip','Place','Airline','JobPosting','CollectionPage','AboutPage','ProfilePage','QAPage','DiscussionForumPosting','Question'];
             for (const id of Object.keys(idMap)) {
                 const t = idMap[id]['@type'];
                 const types = Array.isArray(t) ? t : (t ? [t] : []);
@@ -1089,13 +1089,15 @@ jQuery(document).ready(function ($) {
             LocalBusiness: 'Local businesses',
             Product: 'Products',
             FAQPage: 'FAQ',
+            QAPage: 'Q&A',
+            DiscussionForumPosting: 'Discussion forum',
             HowTo: 'How-to',
             VideoObject: 'Videos',
             Recipe: 'Recipes',
             Event: 'Events',
             JobPosting: 'Job postings'
         };
-        const richOrder = ['Articles','Breadcrumbs','Local businesses','Organization','Review snippets','Products','FAQ','How-to','Videos','Recipes','Events','Job postings'];
+        const richOrder = ['Articles','Breadcrumbs','Local businesses','Organization','Review snippets','Products','FAQ','Q&A','Discussion forum','How-to','Videos','Recipes','Events','Job postings'];
         const richStats = {};
         Object.values(typeStats).forEach(stat => {
             const group = richMap[stat.raw];
