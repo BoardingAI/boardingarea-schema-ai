@@ -356,6 +356,8 @@ final class OpenAI_Handler {
 		$generic_schema = $make_schema( 'BlogPosting', [] );
 		$article_schema = $make_schema( 'Article', [] );
 		$news_schema    = $make_schema( 'NewsArticle', [] );
+
+		// 11. Profile/About
 		$about_schema   = $make_schema( 'AboutPage', [] );
 		$profile_schema = $make_schema( 'ProfilePage', [] );
 
@@ -430,9 +432,20 @@ final class OpenAI_Handler {
 			$result = $result['result'];
 		}
 
-		foreach ( [ 'type', 'justification', 'summary', 'details' ] as $k ) {
+		// Because of OpenAI's strict structured output, sometimes it wraps things differently or drops keys if the schema is too deep.
+		// Let's ensure missing_info is an array if missing.
+		if ( ! isset( $result['missing_info'] ) || ! is_array( $result['missing_info'] ) ) {
+			$result['missing_info'] = [];
+		}
+
+		// Also ensure details is present
+		if ( ! isset( $result['details'] ) || ! is_array( $result['details'] ) ) {
+			$result['details'] = [];
+		}
+
+		foreach ( [ 'type', 'justification', 'summary', 'details', 'missing_info' ] as $k ) {
 			if ( ! array_key_exists( $k, $result ) ) {
-				return new WP_Error( 'basai_openai_missing_keys', 'AI output missing required keys.' );
+				return new WP_Error( 'basai_openai_missing_keys', "AI output missing required key: '{$k}'. Received keys: " . implode(', ', array_keys($result)) . ". Raw AI response: " . print_r($data['choices'][0]['message']['content'], true) );
 			}
 		}
 
