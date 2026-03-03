@@ -1254,6 +1254,38 @@ jQuery(document).ready(function ($) {
         if ($card.length) toggleCollapsible($card);
     });
 
+    function validateClientFetchedSchema(jsonStr) {
+        $.ajax({
+            url: basaiData.ajaxUrl,
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'basai_validate_schema',
+                nonce: basaiData.nonce,
+                post_id: $('#basai-post-id').val(),
+                json: jsonStr
+            },
+            success: function (res) {
+                if (res.success) {
+                    renderServerValidation(res.data || {});
+                    const errs = res.data && res.data.errors ? res.data.errors.length : 0;
+                    updateStatus('✔ Fetched Successfully', errs > 0 ? 'error' : 'success');
+                    updateTimestamp('Fetched: Just now', true);
+                } else {
+                    const msg = res.data && res.data.message ? res.data.message : 'Validation failed';
+                    updateStatus('Fetched successfully, but validation failed: ' + msg, 'warning');
+                }
+            },
+            error: function () {
+                updateStatus('Fetched successfully, but server validation error', 'warning');
+            },
+            complete: function () {
+                $('#basai-fetch-frontend-btn').prop('disabled', false);
+                $loader.removeClass('visible');
+            }
+        });
+    }
+
     function runFetchFrontend() {
         const fetchBtn = $('#basai-fetch-frontend-btn');
         if (fetchBtn.length) fetchBtn.prop('disabled', true);
@@ -1262,37 +1294,107 @@ jQuery(document).ready(function ($) {
         $loader.addClass('visible');
         updateStatus('Fetching Schema...', 'working');
 
-        $.ajax({
-            url: basaiData.ajaxUrl,
-            type: 'POST',
-            dataType: 'json',
-            data: {
-                action: 'basai_fetch_frontend_schema',
-                nonce: basaiData.nonce,
-                post_id: $('#basai-post-id').val(),
-            },
-            success: function (res) {
-                if (res.success) {
-                    const formatted = prettyPrintJson(res.data.schema || '');
-                    $editor.val(formatted || res.data.schema);
-                    renderGraph($editor.val());
-                    renderServerValidation(res.data.report || {});
+        const fetchUrl = $('#basai-fetch-url').val();
+        if (!fetchUrl) {
+            updateStatus('Error: No URL available to fetch.', 'error');
+            if (fetchBtn.length) fetchBtn.prop('disabled', false);
+            $loader.removeClass('visible');
+            return;
+        }
 
-                    const errs = res.data.report && res.data.report.errors ? res.data.report.errors.length : 0;
-                    updateStatus('✔ Fetched Successfully', errs > 0 ? 'error' : 'success');
-                    updateTimestamp('Fetched: Just now', true);
-                } else {
-                    updateStatus('Error: ' + (res.data && res.data.message ? res.data.message : 'Unknown error'), 'error');
+        // Try client-side fetch first to bypass local server-to-server timeouts/cURL errors
+        fetch(fetchUrl)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
                 }
-            },
-            error: function () {
-                updateStatus('Server Error', 'error');
-            },
-            complete: function () {
-                if (fetchBtn.length) fetchBtn.prop('disabled', false);
-                $loader.removeClass('visible');
-            }
-        });
+                return response.text();
+            })
+            .then(html => {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const scriptTags = doc.querySelectorAll('script[type="application/ld+json"]');
+
+                if (scriptTags.length === 0) {
+                    updateStatus('No JSON-LD schema found on the frontend page.', 'error');
+                    if (fetchBtn.length) fetchBtn.prop('disabled', false);
+                    $loader.removeClass('visible');
+                    return;
+                }
+
+                const schemas = [];
+                scriptTags.forEach(script => {
+                    const content = script.textContent.trim();
+                    if (content) {
+                        const parsed = safeParseJSON(content);
+                        if (parsed) schemas.push(parsed);
+                    }
+                });
+
+                if (schemas.length === 0) {
+                    updateStatus('Found script tags, but invalid JSON.', 'error');
+                    if (fetchBtn.length) fetchBtn.prop('disabled', false);
+                    $loader.removeClass('visible');
+                    return;
+                }
+
+                let mergedGraph = [];
+                schemas.forEach(schema => {
+                    if (schema['@graph'] && Array.isArray(schema['@graph'])) {
+                        mergedGraph = mergedGraph.concat(schema['@graph']);
+                    } else {
+                        mergedGraph.push(schema);
+                    }
+                });
+
+                const finalSchema = {
+                    '@context': 'https://schema.org',
+                    '@graph': mergedGraph
+                };
+
+                const jsonStr = JSON.stringify(finalSchema, null, 2);
+                $editor.val(jsonStr);
+                renderGraph(jsonStr);
+
+                // Now validate it on the server
+                validateClientFetchedSchema(jsonStr);
+            })
+            .catch(error => {
+                console.warn("Client-side fetch failed, attempting server-side fallback...", error);
+
+                // Fallback to server-side AJAX
+                $.ajax({
+                    url: basaiData.ajaxUrl,
+                    type: 'POST',
+                    dataType: 'json',
+                    data: {
+                        action: 'basai_fetch_frontend_schema',
+                        nonce: basaiData.nonce,
+                        post_id: $('#basai-post-id').val(),
+                    },
+                    success: function (res) {
+                        if (res.success) {
+                            const formatted = prettyPrintJson(res.data.schema || '');
+                            $editor.val(formatted || res.data.schema);
+                            renderGraph($editor.val());
+                            renderServerValidation(res.data.report || {});
+
+                            const errs = res.data.report && res.data.report.errors ? res.data.report.errors.length : 0;
+                            updateStatus('✔ Fetched Successfully (Server)', errs > 0 ? 'error' : 'success');
+                            updateTimestamp('Fetched: Just now', true);
+                        } else {
+                            updateStatus('Error: ' + (res.data && res.data.message ? res.data.message : 'Unknown error'), 'error');
+                        }
+                    },
+                    error: function () {
+                        updateStatus('Server Error (cURL failed locally)', 'error');
+                    },
+                    complete: function () {
+                        if (fetchBtn.length) fetchBtn.prop('disabled', false);
+                        $loader.removeClass('visible');
+                    }
+                });
+            });
     }
 
     $('#basai-fetch-frontend-btn').on('click', function(e) {

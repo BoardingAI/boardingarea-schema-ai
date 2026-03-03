@@ -106,6 +106,10 @@ final class Meta_Box {
         $active_label = $supported[ $tmpl ] ?? $tmpl;
         $mode = get_option( Settings::OPTION_MODE, 'active' );
 
+        $post_status = get_post_status( $post->ID );
+        $preview_url = ( $post_status === 'publish' ) ? get_permalink( $post->ID ) : get_preview_post_link( $post->ID );
+        $fetch_url   = add_query_arg( 'basai_fetch', '1', $preview_url );
+
         ?>
         <div class="basai-wrapper <?php echo esc_attr( 'basai-mode-' . $mode ); ?>">
 
@@ -305,6 +309,7 @@ final class Meta_Box {
                             <textarea id="basai-json-editor" name="<?php echo esc_attr( self::META_KEY_LIVE ); ?>" spellcheck="false" <?php echo $mode === 'passive' ? 'readonly' : ''; ?>><?php echo esc_textarea( $val ); ?></textarea>
 
                             <input type="hidden" id="basai-post-id" value="<?php echo esc_attr( (string) $post->ID ); ?>">
+                            <input type="hidden" id="basai-fetch-url" value="<?php echo esc_url( $fetch_url ); ?>">
                             <input type="hidden" id="basai-mode" value="<?php echo esc_attr( $mode ); ?>">
 
                             <?php if ( $mode === 'active' ) : ?>
