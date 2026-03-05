@@ -26,6 +26,8 @@ final class Schema_Builder {
 			'Trip'        => 'Trip',
 			'Place'       => 'Place',
 			'Airline'     => 'Airline',
+			'AboutPage'   => 'AboutPage',
+			'ProfilePage' => 'ProfilePage',
 		];
 	}
 
@@ -91,6 +93,12 @@ final class Schema_Builder {
 			? ''
 			: $template_id;
 
+		$webpage_type = 'WebPage';
+		if ( $template_id === 'AboutPage' || $template_id === 'ProfilePage' ) {
+			$webpage_type = $template_id;
+			$secondary_type = '';
+		}
+
 		$image_url = $this->get_primary_image_url( $post, $details );
 		$primary_image_id = ( $image_url !== '' ) ? ( $post_url . '#primaryimage' ) : '';
 
@@ -146,7 +154,7 @@ final class Schema_Builder {
 
 		// --- WebPage ---
 		$webpage = [
-			'@type'              => 'WebPage',
+			'@type'              => $webpage_type,
 			'@id'                => $post_url . '#webpage',
 			'url'                => $post_url,
 			'name'               => $title,

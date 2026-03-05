@@ -19,6 +19,8 @@ jQuery(document).ready(function ($) {
     const $reviewedInput = $('#basai-reviewed-type-input');
     const $currentLabel = $('#basai-current-type');
     const $loader = $('#basai-loading');
+    const $loaderText = $loader.find('.basai-loading-text');
+    const basaiMode = $('#basai-mode').val();
 
     const $graphSummary = $('#basai-graph-summary');
     const $graphErrors = $('#basai-graph-errors');
@@ -800,6 +802,14 @@ jQuery(document).ready(function ($) {
             return;
         }
 
+        // Generate temporary IDs for top-level nodes that lack one so the visualizer can map them.
+        let autoId = 1;
+        nodes.forEach(n => {
+            if (typeof n === 'object' && n !== null && (!n['@id'] || typeof n['@id'] !== 'string' || n['@id'].trim() === '')) {
+                n['@id'] = `_basai_auto_id_${autoId++}`;
+            }
+        });
+
         const idMap = {};
         const idSet = new Set();
         const idCounts = {};
@@ -866,10 +876,23 @@ jQuery(document).ready(function ($) {
             const types = Array.isArray(t) ? t : (t ? [t] : []);
             return types.includes('WebPage');
         });
+
+        // Let's also treat these as acceptable primary roots if there's no WebPage.
+        const alternateRootTypes = ['DiscussionForumPosting', 'QAPage', 'ProfilePage', 'AboutPage'];
+        const alternateRootIds = Object.keys(idMap).filter(id => {
+            const t = idMap[id]['@type'];
+            const types = Array.isArray(t) ? t : (t ? [t] : []);
+            return types.some(tp => alternateRootTypes.includes(tp));
+        });
+
         let rootIds = Object.keys(idMap).filter(id => (inbound[id] || 0) === 0);
+
         if (webPageIds.length > 0) {
             rootIds = Array.from(new Set([ ...webPageIds, ...rootIds ]));
+        } else if (alternateRootIds.length > 0) {
+            rootIds = Array.from(new Set([ ...alternateRootIds, ...rootIds ]));
         }
+
         if (rootIds.length === 0) {
             rootIds = Object.keys(idMap);
         }
@@ -889,7 +912,7 @@ jQuery(document).ready(function ($) {
         }
 
         if (primaryIds.size === 0) {
-            const fallbackTypes = ['BlogPosting','Article','NewsArticle','Review','HowTo','FAQPage','ItemList','VideoObject','Product','Trip','Place','Airline','JobPosting','CollectionPage'];
+            const fallbackTypes = ['BlogPosting','Article','NewsArticle','Review','HowTo','FAQPage','ItemList','VideoObject','Product','Trip','Place','Airline','JobPosting','CollectionPage','AboutPage','ProfilePage','QAPage','DiscussionForumPosting','Question'];
             for (const id of Object.keys(idMap)) {
                 const t = idMap[id]['@type'];
                 const types = Array.isArray(t) ? t : (t ? [t] : []);
@@ -1087,13 +1110,15 @@ jQuery(document).ready(function ($) {
             LocalBusiness: 'Local businesses',
             Product: 'Products',
             FAQPage: 'FAQ',
+            QAPage: 'Q&A',
+            DiscussionForumPosting: 'Discussion forum',
             HowTo: 'How-to',
             VideoObject: 'Videos',
             Recipe: 'Recipes',
             Event: 'Events',
             JobPosting: 'Job postings'
         };
-        const richOrder = ['Articles','Breadcrumbs','Local businesses','Organization','Review snippets','Products','FAQ','How-to','Videos','Recipes','Events','Job postings'];
+        const richOrder = ['Articles','Breadcrumbs','Local businesses','Organization','Review snippets','Products','FAQ','Q&A','Discussion forum','How-to','Videos','Recipes','Events','Job postings'];
         const richStats = {};
         Object.values(typeStats).forEach(stat => {
             const group = richMap[stat.raw];
@@ -1252,6 +1277,161 @@ jQuery(document).ready(function ($) {
         if ($card.length) toggleCollapsible($card);
     });
 
+    function validateClientFetchedSchema(jsonStr) {
+        $.ajax({
+            url: basaiData.ajaxUrl,
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'basai_validate_schema',
+                nonce: basaiData.nonce,
+                post_id: $('#basai-post-id').val(),
+                json: jsonStr
+            },
+            success: function (res) {
+                if (res.success) {
+                    renderServerValidation(res.data || {});
+                    const errs = res.data && res.data.errors ? res.data.errors.length : 0;
+                    updateStatus('✔ Fetched Successfully', errs > 0 ? 'error' : 'success');
+                    updateTimestamp('Fetched: Just now', true);
+                } else {
+                    const msg = res.data && res.data.message ? res.data.message : 'Validation failed';
+                    updateStatus('Fetched successfully, but validation failed: ' + msg, 'warning');
+                }
+            },
+            error: function () {
+                updateStatus('Fetched successfully, but server validation error', 'warning');
+            },
+            complete: function () {
+                $('#basai-fetch-frontend-btn').prop('disabled', false);
+                $loader.removeClass('visible');
+            }
+        });
+    }
+
+    function runFetchFrontend() {
+        const fetchBtn = $('#basai-fetch-frontend-btn');
+        if (fetchBtn.length) fetchBtn.prop('disabled', true);
+
+        $loaderText.text('Fetching Frontend Schema...');
+        $loader.addClass('visible');
+        updateStatus('Fetching Schema...', 'working');
+
+        const fetchUrl = $('#basai-fetch-url').val();
+        if (!fetchUrl) {
+            updateStatus('Error: No URL available to fetch.', 'error');
+            if (fetchBtn.length) fetchBtn.prop('disabled', false);
+            $loader.removeClass('visible');
+            return;
+        }
+
+        // Try client-side fetch first to bypass local server-to-server timeouts/cURL errors
+        fetch(fetchUrl)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.text();
+            })
+            .then(html => {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const scriptTags = doc.querySelectorAll('script[type="application/ld+json"]');
+
+                if (scriptTags.length === 0) {
+                    updateStatus('No JSON-LD schema found on the frontend page.', 'error');
+                    if (fetchBtn.length) fetchBtn.prop('disabled', false);
+                    $loader.removeClass('visible');
+                    return;
+                }
+
+                const schemas = [];
+                scriptTags.forEach(script => {
+                    const content = script.textContent.trim();
+                    if (content) {
+                        const parsed = safeParseJSON(content);
+                        if (parsed) schemas.push(parsed);
+                    }
+                });
+
+                if (schemas.length === 0) {
+                    updateStatus('Found script tags, but invalid JSON.', 'error');
+                    if (fetchBtn.length) fetchBtn.prop('disabled', false);
+                    $loader.removeClass('visible');
+                    return;
+                }
+
+                let mergedGraph = [];
+                schemas.forEach(schema => {
+                    if (schema['@graph'] && Array.isArray(schema['@graph'])) {
+                        mergedGraph = mergedGraph.concat(schema['@graph']);
+                    } else {
+                        mergedGraph.push(schema);
+                    }
+                });
+
+                const finalSchema = {
+                    '@context': 'https://schema.org',
+                    '@graph': mergedGraph
+                };
+
+                const jsonStr = JSON.stringify(finalSchema, null, 2);
+                $editor.val(jsonStr);
+                renderGraph(jsonStr);
+
+                // Now validate it on the server
+                validateClientFetchedSchema(jsonStr);
+            })
+            .catch(error => {
+                console.warn("Client-side fetch failed, attempting server-side fallback...", error);
+
+                // Fallback to server-side AJAX
+                $.ajax({
+                    url: basaiData.ajaxUrl,
+                    type: 'POST',
+                    dataType: 'json',
+                    data: {
+                        action: 'basai_fetch_frontend_schema',
+                        nonce: basaiData.nonce,
+                        post_id: $('#basai-post-id').val(),
+                    },
+                    success: function (res) {
+                        if (res.success) {
+                            const formatted = prettyPrintJson(res.data.schema || '');
+                            $editor.val(formatted || res.data.schema);
+                            renderGraph($editor.val());
+                            renderServerValidation(res.data.report || {});
+
+                            const errs = res.data.report && res.data.report.errors ? res.data.report.errors.length : 0;
+                            updateStatus('✔ Fetched Successfully (Server)', errs > 0 ? 'error' : 'success');
+                            updateTimestamp('Fetched: Just now', true);
+                        } else {
+                            updateStatus('Error: ' + (res.data && res.data.message ? res.data.message : 'Unknown error'), 'error');
+                        }
+                    },
+                    error: function () {
+                        updateStatus('Server Error (cURL failed locally)', 'error');
+                    },
+                    complete: function () {
+                        if (fetchBtn.length) fetchBtn.prop('disabled', false);
+                        $loader.removeClass('visible');
+                    }
+                });
+            });
+    }
+
+    $('#basai-fetch-frontend-btn').on('click', function(e) {
+        e.preventDefault();
+        runFetchFrontend();
+    });
+
+    if (basaiMode === 'passive') {
+        // Automatically fetch on load if editor is empty
+        if (!$editor.val().trim() || $editor.val() === '[]' || $editor.val() === '{}') {
+            runFetchFrontend();
+        }
+    }
+
     function runGenerate(save = true) {
         const selectedType = $typeSelector.val();
         const selectedReviewed = $reviewSelector.val();
@@ -1263,6 +1443,7 @@ jQuery(document).ready(function ($) {
         const $genSaveBtn = $('#basai-generate-save-btn'); // Local definition for unified logic
         if ($genSaveBtn.length) $genSaveBtn.prop('disabled', true);
         
+        $loaderText.text('Generating Schema...');
         $loader.addClass('visible');
         updateStatus(workingMsg, 'working');
 

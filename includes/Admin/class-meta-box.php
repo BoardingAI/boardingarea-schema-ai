@@ -34,14 +34,23 @@ final class Meta_Box {
         add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
         add_action( 'wp_ajax_basai_generate_now', [ $this, 'handle_ajax_generate_now' ] );
         add_action( 'wp_ajax_basai_validate_schema', [ $this, 'handle_ajax_validate_schema' ] );
+        add_action( 'wp_ajax_basai_fetch_frontend_schema', [ $this, 'handle_ajax_fetch_frontend_schema' ] );
     }
 
     public function add_meta_box(): void {
+        // Fetch all public post types dynamically.
+        // This naturally includes 'post', 'page', and any custom types like 'milepoint_qa' or 'milepoint-chat'
+        // without crashing if those custom types don't exist on the current site.
+        $post_types = get_post_types( [ 'public' => true ], 'names' );
+
+        // Ensure standard types are always targeted just in case
+        $target_types = array_unique( array_merge( [ 'post', 'page' ], array_values( $post_types ) ) );
+
         add_meta_box(
             'basai_schema_box',
             'BoardingArea Schema AI',
             [ $this, 'render_meta_box' ],
-            [ 'post', 'page' ],
+            $target_types,
             'normal',
             'high'
         );
@@ -103,12 +112,18 @@ final class Meta_Box {
         }
 
         $active_label = $supported[ $tmpl ] ?? $tmpl;
+        $mode = get_option( Settings::OPTION_MODE, 'active' );
+
+        $post_status = get_post_status( $post->ID );
+        $preview_url = ( $post_status === 'publish' ) ? get_permalink( $post->ID ) : get_preview_post_link( $post->ID );
+        $fetch_url   = add_query_arg( 'basai_fetch', '1', $preview_url );
 
         ?>
-        <div class="basai-wrapper">
+        <div class="basai-wrapper <?php echo esc_attr( 'basai-mode-' . $mode ); ?>">
 
             <div class="basai-header">
                 <div class="basai-controls">
+                    <?php if ( $mode === 'active' ) : ?>
                     <div class="basai-control-item">
                         <label for="basai-type-selector" class="basai-label">Schema Type</label>
                         <select id="basai-type-selector" class="basai-select">
@@ -135,6 +150,14 @@ final class Meta_Box {
                     <button type="button" id="basai-generate-save-btn" class="button button-primary basai-btn-large">
                         <span class="dashicons dashicons-update"></span> Generate Schema
                     </button>
+                    <?php else : ?>
+                    <div class="basai-control-item" style="flex: 1;">
+                        <strong>Passive Mode:</strong> The plugin is listening to existing schema on the frontend.
+                    </div>
+                    <button type="button" id="basai-fetch-frontend-btn" class="button button-primary basai-btn-large">
+                        <span class="dashicons dashicons-download"></span> Fetch Existing Schema
+                    </button>
+                    <?php endif; ?>
                 </div>
 
                 <div class="basai-meta-status">
@@ -158,9 +181,13 @@ final class Meta_Box {
 
             <div class="basai-action-bar">
                 <div class="action-bar-status">
-                    <span class="dashicons dashicons-category"></span>
+                    <span class="dashicons <?php echo $mode === 'active' ? 'dashicons-category' : 'dashicons-visibility'; ?>"></span>
                     <span class="template-indicator" title="Current Template">
-                        Using: <strong id="basai-current-type"><?php echo esc_html( $active_label ); ?></strong>
+                        <?php if ( $mode === 'active' ) : ?>
+                            Using: <strong id="basai-current-type"><?php echo esc_html( $active_label ); ?></strong>
+                        <?php else : ?>
+                            <strong>Visualizing Frontend Schema</strong>
+                        <?php endif; ?>
                     </span>
                 </div>
                 <div class="action-bar-tools">
@@ -270,8 +297,11 @@ final class Meta_Box {
                     <div class="basai-editor-header basai-collapsible-header">
                         <div class="editor-title">
                             <span class="dashicons dashicons-code-standards"></span> Schema JSON-LD
-                            <?php if ( '' !== $draft ) : ?>
+                            <?php if ( $mode === 'active' && '' !== $draft ) : ?>
                                 <span class="basai-badge warning">Draft Mode</span>
+                            <?php endif; ?>
+                            <?php if ( $mode === 'passive' ) : ?>
+                                <span class="basai-badge">Read Only</span>
                             <?php endif; ?>
                         </div>
                         <div class="editor-actions">
@@ -284,17 +314,22 @@ final class Meta_Box {
 
                     <div id="basai-json-body" class="basai-collapsible-body">
                         <div class="basai-editor-wrap">
-                            <textarea id="basai-json-editor" name="<?php echo esc_attr( self::META_KEY_LIVE ); ?>" spellcheck="false"><?php echo esc_textarea( $val ); ?></textarea>
+                            <textarea id="basai-json-editor" name="<?php echo esc_attr( self::META_KEY_LIVE ); ?>" spellcheck="false" <?php echo $mode === 'passive' ? 'readonly' : ''; ?>><?php echo esc_textarea( $val ); ?></textarea>
 
                             <input type="hidden" id="basai-post-id" value="<?php echo esc_attr( (string) $post->ID ); ?>">
+                            <input type="hidden" id="basai-fetch-url" value="<?php echo esc_url( $fetch_url ); ?>">
+                            <input type="hidden" id="basai-mode" value="<?php echo esc_attr( $mode ); ?>">
+
+                            <?php if ( $mode === 'active' ) : ?>
                             <input type="hidden" id="basai-justification-input" name="basai_ai_justification" value="<?php echo esc_attr( $just ); ?>">
                             <input type="hidden" id="basai-template-id-input" name="basai_template_id" value="<?php echo esc_attr( $tmpl ); ?>">
                             <input type="hidden" id="basai-reviewed-type-input" name="basai_reviewed_type" value="<?php echo esc_attr( $reviewed ); ?>">
+                            <?php endif; ?>
 
                             <div id="basai-loading" class="basai-loading-overlay">
                                 <div class="basai-spinner-box">
                                     <span class="spinner is-active"></span>
-                                    <span>Generating Schema...</span>
+                                    <span class="basai-loading-text">Generating Schema...</span>
                                 </div>
                             </div>
                         </div>
@@ -317,7 +352,9 @@ final class Meta_Box {
             return;
         }
 
-        if ( isset( $_POST[ self::META_KEY_LIVE ] ) ) {
+        $mode = get_option( Settings::OPTION_MODE, 'active' );
+
+        if ( $mode === 'active' && isset( $_POST[ self::META_KEY_LIVE ] ) ) {
             $just = sanitize_text_field( (string) ( $_POST['basai_ai_justification'] ?? '' ) );
             $tmpl = sanitize_text_field( (string) ( $_POST['basai_template_id'] ?? 'Auto' ) );
             $rev  = sanitize_text_field( (string) ( $_POST['basai_reviewed_type'] ?? '' ) );
@@ -449,5 +486,84 @@ final class Meta_Box {
         );
 
         wp_send_json_success( $report );
+    }
+
+    public function handle_ajax_fetch_frontend_schema(): void {
+        check_ajax_referer( 'basai_ajax_nonce', 'nonce' );
+
+        $post_id = absint( $_POST['post_id'] ?? 0 );
+        if ( ! $post_id || ! current_user_can( 'edit_post', $post_id ) ) {
+            wp_send_json_error( [ 'message' => 'Insufficient permissions.' ] );
+        }
+
+        $post_status = get_post_status( $post_id );
+        $url = ( $post_status === 'publish' ) ? get_permalink( $post_id ) : get_preview_post_link( $post_id );
+
+        if ( ! $url ) {
+            wp_send_json_error( [ 'message' => 'Unable to determine post URL.' ] );
+        }
+
+        // Add a query arg to bypass cache if needed, though preview link usually handles drafts.
+        $url = add_query_arg( 'basai_fetch', '1', $url );
+
+        $response = wp_remote_get( $url, [ 'timeout' => 15, 'sslverify' => false ] );
+        if ( is_wp_error( $response ) ) {
+            wp_send_json_error( [ 'message' => 'Failed to fetch frontend HTML: ' . $response->get_error_message() ] );
+        }
+
+        $code = wp_remote_retrieve_response_code( $response );
+        if ( $code !== 200 ) {
+            wp_send_json_error( [ 'message' => 'Failed to fetch frontend HTML (HTTP ' . $code . ').' ] );
+        }
+
+        $html = wp_remote_retrieve_body( $response );
+        if ( empty( $html ) ) {
+            wp_send_json_error( [ 'message' => 'Empty HTML response.' ] );
+        }
+
+        // Parse HTML for all <script type="application/ld+json"> tags
+        $schemas = [];
+        if ( preg_match_all( '/<script[^>]*type=["\']application\/ld\+json["\'][^>]*>(.*?)<\/script>/is', $html, $matches ) ) {
+            foreach ( $matches[1] as $json_string ) {
+                $decoded = json_decode( trim( $json_string ), true );
+                if ( is_array( $decoded ) && JSON_ERROR_NONE === json_last_error() ) {
+                    $schemas[] = $decoded;
+                }
+            }
+        }
+
+        if ( empty( $schemas ) ) {
+            wp_send_json_error( [ 'message' => 'No JSON-LD schema found on the frontend page.' ] );
+        }
+
+        // Try to merge into a single graph
+        $merged_graph = [];
+        foreach ( $schemas as $schema ) {
+            if ( isset( $schema['@graph'] ) && is_array( $schema['@graph'] ) ) {
+                $merged_graph = array_merge( $merged_graph, $schema['@graph'] );
+            } else {
+                $merged_graph[] = $schema;
+            }
+        }
+
+        $final_schema = [
+            '@context' => 'https://schema.org',
+            '@graph'   => $merged_graph,
+        ];
+
+        $json_str = wp_json_encode( $final_schema, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+
+        // Validation for the fetched schema
+        $report = Schema_Validator::validate_json(
+            $json_str,
+            [
+                'site_url' => home_url( '/' ),
+            ]
+        );
+
+        wp_send_json_success( [
+            'schema' => $json_str,
+            'report' => $report,
+        ] );
     }
 }

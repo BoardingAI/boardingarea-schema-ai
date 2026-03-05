@@ -116,23 +116,31 @@ final class OpenAI_Handler {
 		$make_schema = function( string $type_name, array $details_props ) use ( $common_props ) {
 			$details_required = array_keys( $details_props );
 			
-			return [
+			$schema = [
 				'type' => 'object',
 				'properties' => [
 					'type'          => [ 'type' => 'string', 'const' => $type_name ],
 					'justification' => [ 'type' => 'string' ],
 					'summary'       => [ 'type' => 'string' ],
 					'missing_info'  => [ 'type' => 'array', 'items' => [ 'type' => 'string' ] ],
-					'details'       => [
-						'type' => 'object',
-						'properties' => $details_props,
-						'required' => $details_required,
-						'additionalProperties' => false
-					]
 				],
-				'required' => [ 'type', 'justification', 'summary', 'missing_info', 'details' ],
+				'required' => [ 'type', 'justification', 'summary', 'missing_info' ],
 				'additionalProperties' => false
 			];
+
+			// Only add details if there are actual properties to extract.
+			// Empty object schemas cause OpenAI's parser to drop fields.
+			if ( ! empty( $details_props ) ) {
+				$schema['properties']['details'] = [
+					'type' => 'object',
+					'properties' => $details_props,
+					'required' => $details_required,
+					'additionalProperties' => false
+				];
+				$schema['required'][] = 'details';
+			}
+
+			return $schema;
 		};
 
 		// --- Reusable Property Definitions (Strict: nullable for optional) ---
@@ -357,6 +365,10 @@ final class OpenAI_Handler {
 		$article_schema = $make_schema( 'Article', [] );
 		$news_schema    = $make_schema( 'NewsArticle', [] );
 
+		// 11. Profile/About
+		$about_schema   = $make_schema( 'AboutPage', [] );
+		$profile_schema = $make_schema( 'ProfilePage', [] );
+
 		return [
 			'type' => 'object',
 			'properties' => [
@@ -373,7 +385,9 @@ final class OpenAI_Handler {
 						$airline_schema,
 						$generic_schema,
 						$article_schema,
-						$news_schema
+						$news_schema,
+						$about_schema,
+						$profile_schema
 					]
 				]
 			],
@@ -426,10 +440,28 @@ final class OpenAI_Handler {
 			$result = $result['result'];
 		}
 
-		foreach ( [ 'type', 'justification', 'summary', 'details' ] as $k ) {
-			if ( ! array_key_exists( $k, $result ) ) {
-				return new WP_Error( 'basai_openai_missing_keys', 'AI output missing required keys.' );
-			}
+		// Because of OpenAI's strict structured output, sometimes it wraps things differently or drops keys if the schema is too deep.
+		// Let's ensure missing_info is an array if missing.
+		if ( ! isset( $result['missing_info'] ) || ! is_array( $result['missing_info'] ) ) {
+			$result['missing_info'] = [];
+		}
+
+		// Also ensure details is present
+		if ( ! isset( $result['details'] ) || ! is_array( $result['details'] ) ) {
+			$result['details'] = [];
+		}
+
+		// Ensure justification and summary are strings
+		if ( ! isset( $result['justification'] ) || ! is_string( $result['justification'] ) ) {
+			$result['justification'] = '';
+		}
+
+		if ( ! isset( $result['summary'] ) || ! is_string( $result['summary'] ) ) {
+			$result['summary'] = '';
+		}
+
+		if ( ! isset( $result['type'] ) ) {
+			return new WP_Error( 'basai_openai_missing_keys', "AI output missing required key: 'type'. Received keys: " . implode(', ', array_keys($result)) . ". Raw AI response: " . print_r($data['choices'][0]['message']['content'], true) );
 		}
 
 		return $result;
@@ -473,6 +505,10 @@ MISSING INFO (CRITICAL):
 REVIEW VS TRIP DISTINCTION:
 - Choose type="Trip" for journeys, itineraries, guides, trip reports.
 - Choose type="Review" ONLY for specific evaluations with a verdict/rating.
+
+PAGE TYPES:
+- Choose type="AboutPage" if the content primarily describes a business, publication, or organization's history, mission, or "About Us" information.
+- Choose type="ProfilePage" if the content primarily describes a specific individual person (like an author bio page, employee profile, or user profile).
 
 DETAILS:
 - Fill the 'details' object corresponding to your chosen 'type'.
